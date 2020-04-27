@@ -56,6 +56,13 @@ $GAME{moves} = $pgn->moves;
 $GAME{comments} = $pgn->comments;
 $GAME{cur} = 0;
 
+my $pos = new Chess::Rep;
+$GAME{positions} = [$pos->get_fen];
+for (my $i = 0; $i <= $#{$GAME{moves}}; $i++) {
+  $pos->go_move($GAME{moves}->[$i]);
+  push @{$GAME{positions}}, $pos->get_fen;
+}
+
 sub draw_board {
   my $win = shift;
   my $x = shift;
@@ -75,7 +82,6 @@ sub draw_moves {
   my $win = shift;
   my $x = shift;
   my $y = shift;
-  my $cur = "1. ";
   my ($cx, $cy) = ($x, $y);
   my ($maxy, $maxx);
   $win->getmaxyx($maxy, $maxx);
@@ -128,8 +134,18 @@ sub key_pressed {
   my $c = shift;
   my $key = shift;
 
-  if ($c eq 'j') {
-    $GAME{pos}->go_move($GAME{moves}->[$GAME{cur}++]);
+  if ($c eq 'g') {
+    $GAME{cur} = 0;
+    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{cur}]);
+  } elsif ($c eq 'G') {
+    $GAME{cur} = $#{$GAME{moves}}+1;
+    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{cur}]);
+  } elsif ($c eq 'j') {
+    if ($GAME{cur} <= $#{$GAME{moves}}) { $GAME{cur}++; }
+    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{cur}]);
+  } elsif ($c eq 'k') {
+    if ($GAME{cur} > 0) { $GAME{cur}--; }
+    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{cur}]);
   }
 }
 

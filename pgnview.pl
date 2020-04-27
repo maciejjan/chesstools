@@ -14,10 +14,19 @@ use constant {
   MOVE_NUMBER => 5
 };
 
-my %PCS = (
+our %PCS = (
   0x01 => '♟', 0x02 => '♞', 0x04 => '♚',
   0x08 => '♝', 0x10 => '♜', 0x20 => '♛'
 );
+
+our %GAME = (
+  pos => undef,
+  positions => undef,
+  moves => undef,
+  comments => undef,
+  cur => undef,
+);
+
 
 # TODO (for v 0.1)
 # - "k" jumps a move back
@@ -36,28 +45,24 @@ my %PCS = (
 #        ju = e5
 #        vdi = Nc6
 
-my $pos = new Chess::Rep;
+$GAME{pos} = new Chess::Rep;
 
 my $pgn = new Chess::PGN::Parse "$ARGV[0]"
   || die "Could not open file: $ARGV[0]";
 $pgn->read_game();
 $pgn->parse_game({save_comments => 'yes', comments_struct => 'array'});
 
-my $moves = $pgn->moves;
-my $comments = $pgn->comments;
-
-for my $k (keys %$comments) {
-  print $k." ".(join ";", @{$comments->{$k}})."\n";
-}
+$GAME{moves} = $pgn->moves;
+$GAME{comments} = $pgn->comments;
+$GAME{cur} = 0;
 
 sub draw_board {
-  my $pos = shift;
   my $win = shift;
   my $x = shift;
   my $y = shift;
   for (my $i = 0; $i < 8; $i++) {
     for (my $j = 0; $j < 8; $j++) {
-      my $piece = $pos->get_piece_at($i << 4 | $j);
+      my $piece = $GAME{pos}->get_piece_at($i << 4 | $j);
       my $col = 1 + ($i+$j+1) % 2 + ($piece < 0x80)*2;
       $win->attron(COLOR_PAIR($col));
       my $pc = $piece ? $PCS{$piece & 0x7F} : " ";
@@ -67,8 +72,6 @@ sub draw_board {
 }
 
 sub draw_moves {
-  my $moves = shift;
-  my $cur_move = shift;
   my $win = shift;
   my $x = shift;
   my $y = shift;
@@ -76,10 +79,10 @@ sub draw_moves {
   my ($cx, $cy) = ($x, $y);
   my ($maxy, $maxx);
   $win->getmaxyx($maxy, $maxx);
-  for (my $i = 0; $i <= $#$moves; $i++) {
+  for (my $i = 0; $i <= $#{$GAME{moves}}; $i++) {
     my $mn = int($i/2+1).".";
     if ($i % 2 == 0) {
-      if ($cx + length("$mn $moves->[$i] $moves->[$i+1]") > $maxx) {
+      if ($cx + length("$mn $GAME{moves}->[$i] $GAME{moves}->[$i+1]") > $maxx) {
         $cx = $x;
         $cy++;
         last if $cy > $y+7;
@@ -89,10 +92,44 @@ sub draw_moves {
       $win->attroff(COLOR_PAIR(MOVE_NUMBER));
       $cx += length($mn) + 1;
     } 
-    if ($i+1 == $cur_move) { $win->attron(A_REVERSE); }
-    $win->addstring($cy, $cx, $moves->[$i]);
-    $cx += length($moves->[$i]) + 1;
-    if ($i+1 == $cur_move) { $win->attroff(A_REVERSE); }
+    if ($i+1 == $GAME{cur}) { $win->attron(A_REVERSE); }
+    $win->addstring($cy, $cx, $GAME{moves}->[$i]);
+    $cx += length($GAME{moves}->[$i]) + 1;
+    if ($i+1 == $GAME{cur}) { $win->attroff(A_REVERSE); }
+  }
+}
+
+sub draw_comments {
+  my $win = shift;
+  my $x = shift;
+  my $y = shift;
+
+  my $cm2 = int($GAME{cur}/2+0.5) . ($GAME{cur} % 2 == 1 ? "w" : "b");
+  if (defined($GAME{comments}->{$cm2})) {
+    my $j = 0;
+    for $c (@{$GAME{comments}->{$cm2}}) {
+      $win->addstring($y+$j, $x, $c);
+      $j++;
+    }
+  }
+}
+
+sub draw {
+  my $win = shift;
+
+  $win->clear;
+  draw_board($win, 1, 0);
+  $win->attroff(COLOR_PAIR(1));
+  draw_moves($win, 26, 0);
+  draw_comments($win, 0, 9);
+}
+
+sub key_pressed {
+  my $c = shift;
+  my $key = shift;
+
+  if ($c eq 'j') {
+    $GAME{pos}->go_move($GAME{moves}->[$GAME{cur}++]);
   }
 }
 
@@ -111,31 +148,13 @@ init_pair(WHITE_ON_LIGHT, 231, 178);
 init_pair(WHITE_ON_DARK, 231, 94);
 init_pair(BLACK_ON_LIGHT, 0, 178);
 init_pair(BLACK_ON_DARK, 0, 94);
-init_pair(5, COLOR_RED, -1);
-
-my $moves = $pgn->moves;
-my $comments = $pgn->comments;
-my $cur_move = 0;
+init_pair(MOVE_NUMBER, COLOR_RED, -1);
 
 my ($c, $key);
 while (!($c eq 'q')) {
-  $win->clear;
-  draw_board($pos, $win, 1, 0);
-  $win->attroff(COLOR_PAIR(1));
-  draw_moves($moves, $cur_move, $win, 26, 0);
-  my $cm2 = int($cur_move/2+0.5) . ($cur_move % 2 == 1 ? "w" : "b");
-  if (defined($comments->{$cm2})) {
-    my $j = 0;
-    for $c (@{$comments->{$cm2}}) {
-      $win->addstring(9+$j, 0, $c);
-      $j++;
-    }
-  }
-
+  draw $win;
   ($c, $key) = $win->getchar();
-  if ($c eq 'j') {
-    $pos->go_move($moves->[$cur_move++]);
-  }
+  key_pressed $c, $key;
 }
 
 endwin;

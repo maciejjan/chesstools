@@ -17,7 +17,8 @@ our %COLORS = (
 
 our $POSITION = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
 
-our $PIECES_SPRITE = <<END
+# the PNG image containing all pieces, 1800x600px (each piece is 300x300)
+our $PIECES_SPRITE = <<ENDSPRITE
 iVBORw0KGgoAAAANSUhEUgAABwgAAAJYCAQAAADcLHpdAAAABGdBTUEAALGPC/xhBQAAACBjSFJN
 AAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAHdElN
 RQfkBBwTChRQG5wNAACAAElEQVR42uydd3wURd/Av1fSe0IJvfdepUgREFCkCgIqVqzYe8feu2Lv
@@ -1619,7 +1620,7 @@ EEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBC
 CCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQozM/wf4VuBGQ5y3jgAAACV0RVh0ZGF0ZTpjcmVhdGUA
 MjAyMC0wNC0yOFQxOTowOToxOSswMDowMP1m4YEAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjAtMDQt
 MjhUMTk6MDk6MDMrMDA6MDDk4QbtAAAAAElFTkSuQmCC
-END
+ENDSPRITE
 ;
 
 $main = new MainWindow;
@@ -1627,6 +1628,7 @@ $canvas = $main->Canvas();
 $canvas->place(-relx => 0, -rely => 0, -relwidth => 1.0, -relheight => 1.0);
 $img = $main->Photo("sprite", -data => $PIECES_SPRITE, -format => "png");
 
+# piece images go here
 our %PIECES = (
   K => $main->Photo("K"),
   Q => $main->Photo("Q"),
@@ -1642,6 +1644,7 @@ our %PIECES = (
   p => $main->Photo("p"),
 );
 
+# the positions of individual pieces in the sprite
 our %PIECEPOS = (
   K => [0, 0, 300, 300],
   Q => [300, 0, 600, 300],
@@ -1735,3 +1738,35 @@ $main->fileevent(STDIN, 'readable', \&handle_input);
 
 $main->MainLoop;
 
+=head1 NAME
+
+drawboard - draw a chess board with the given position
+
+=head1 SYNOPSIS
+
+drawboard [-l]
+
+=head1 OPTIONS
+
+ -l              linger after STDIN is closed
+
+=head1 DESCRIPTION
+
+This program repeatedly reads a chess position in FEN notation from the
+standard input and draws a board with this position.
+
+=head1 LICENSE
+
+GPLv3
+
+=head1 ACKNOWLEDGEMENTS
+
+The chess piece images were taken from:
+<https://commons.wikimedia.org/wiki/File:Chess_Pieces_Sprite.svg>
+and are work of the user Cburnett.
+
+=head1 BUGS
+
+Please report bugs to: <http://gitlab.com/mmj/chesstools>
+
+=cut

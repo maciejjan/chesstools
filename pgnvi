@@ -27,6 +27,10 @@ our %GAME = (
   cur => undef,
 );
 
+our $VIEWERCMD = "perl drawboard";
+
+open VIEWER, "|-", $VIEWERCMD;
+autoflush VIEWER 1;
 
 # TODO (for v 0.1)
 # - "k" jumps a move back
@@ -44,10 +48,13 @@ our %GAME = (
 #        jr = e4
 #        ju = e5
 #        vdi = Nc6
+# TODO: a visualization program: take position from stdin, print board
+# TODO views for browsing all games in the file
+# - list view
+# - tree view
 
 $GAME{pos} = new Chess::Rep;
-
-my $pgn = new Chess::PGN::Parse "$ARGV[0]"
+$pgn = new Chess::PGN::Parse "$ARGV[0]"
   || die "Could not open file: $ARGV[0]";
 $pgn->read_game();
 $pgn->parse_game({save_comments => 'yes', comments_struct => 'array'});
@@ -124,9 +131,10 @@ sub draw {
   my $win = shift;
 
   $win->clear;
-  draw_board($win, 1, 0);
-  $win->attroff(COLOR_PAIR(1));
-  draw_moves($win, 26, 0);
+#  draw_board($win, 1, 0);
+#  $win->attroff(COLOR_PAIR(1));
+  print VIEWER $GAME{pos}->get_fen."\n";
+  draw_moves($win, 0, 0);
   draw_comments($win, 0, 9);
 }
 
@@ -174,3 +182,5 @@ while (!($c eq 'q')) {
 }
 
 endwin;
+
+close VIEWER;

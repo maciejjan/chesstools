@@ -95,6 +95,17 @@ sub format_list {
   return $result;
 }
 
+# BOARD
+
+sub board_open {
+  open $BOARD, "|-", $BOARDCMD;
+  autoflush $BOARD 1;
+}
+
+sub board_close {
+  close $BOARD;
+}
+
 # GAME VIEW
 
 sub game_precompute_positions {
@@ -181,10 +192,9 @@ sub game_keypress {
     game_redraw;
   } elsif ($c eq 'v') {
     if (($BOARD) && ($BOARD->opened)) {
-      close $BOARD;
+      board_close;
     } else {
-      open $BOARD, "|-", $BOARDCMD;
-      autoflush $BOARD 1;
+      board_open;
       game_redraw;
     }
   }

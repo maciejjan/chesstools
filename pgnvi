@@ -14,6 +14,12 @@ our %LIST = (
   top => 0,
 );
 
+our %TREE = (
+  sel => 0,
+  root => undef,
+  list => undef,
+);
+
 our @LIST_FIELDS = ("White", "Black", "Year", "Result", "ECO");
 
 our $BOARDCMD = "perl drawboard";
@@ -240,6 +246,160 @@ sub game_show {
   }
 }
 
+# TREE VIEW
+
+sub tree_make_children {
+  my $node = shift;
+
+  $node->{children} = {};
+  for my $idx (@{$node->{games}}) {
+    my $move = $GAMES->[$idx]->{GameMoves}->[$node->{depth}];
+    if (!defined($node->{children}->{$move})) {
+      $node->{children}->{$move} = {
+        expanded => 0, depth => $node->{depth}+1,
+        games => [], children => undef, text => undef
+      };
+    }
+    push @{$node->{children}->{$move}->{games}}, $idx;
+  }
+  for my $key (keys %{$node->{children}}) {
+    $n = $#{$node->{children}->{$key}->{games}}+1;
+    if ($n > 1) {
+      $node->{children}->{$key}->{text} = "+ $key ($n)";
+    } else {
+      my $game = $GAMES->[$node->{children}->{$key}->{games}->[0]];
+      $node->{children}->{$key}->{text} = "* $key: " . format_game $game;
+    }
+  }
+}
+
+sub tree_create {
+  my $root = { expanded => 1, depth => 0, games => [], children => undef };
+  for ($i = 0; $i <= $#$GAMES; $i++) {
+    push @{$root->{games}}, $i;
+  }
+  tree_make_children $root;
+  $TREE{root} = $root;
+
+  $TREE{list} = [];
+  for my $childkey (sort keys %{$root->{children}}) {
+    push @{$TREE{list}}, $root->{children}->{$childkey};
+  }
+}
+
+sub tree_draw_node {
+  my ($i, $maxy, $key, $node) = @_;
+  my $win = $TREE{win};
+
+  my @node_str = ();
+  for (my $j = 0; $j < $node->{depth}; $j++) {
+    push @node_str, "  ";
+  }
+  push @node_str, ($node->{expanded} ? "-" : "+");
+  push @node_str, " ".$key." (".($#{$node->{games}}+1).")";
+  $win->addstring($i, 0, join("", @node_str));
+}
+
+sub tree_get_visible_subtree {
+  my $node = shift;
+  my @result = ($node);
+  if ($node->{expanded}) {
+    for my $key (sort keys %{$node->{children}}) {
+      my $child = $node->{children}->{$key};
+      splice @result, @result, 0, tree_get_visible_subtree($child);
+    }
+  }
+  return @result;
+}
+
+# TODO do not expand leaf nodes!
+sub tree_expand_node {
+  my $i = shift;
+  my $node = $TREE{list}->[$i];
+
+  $node->{expanded} = 1;
+  if (!defined($node->{children})) {
+    tree_make_children $node;
+  }
+  my @vn = tree_get_visible_subtree $node;
+  splice @{$TREE{list}}, $i, 1, @vn;
+}
+
+sub tree_collapse_node {
+  my $i = shift;
+  my $node = $TREE{list}->[$i];
+
+  $node->{expanded} = 0;
+  if ($i == $#{$TREE{list}}) { return }
+  for ($j = $i+1;
+       ($j < $#{$TREE{list}}) && ($TREE{list}->[$j]->{depth} > $node->{depth});
+       $j++) {}
+  splice @{$TREE{list}}, ($i+1), ($j-$i-1);
+}
+
+sub tree_redraw {
+  my $win = $TREE{win};
+  my $i = 0;
+
+  my ($maxy, $maxx);
+  $win->getmaxyx($maxy, $maxx);
+
+  $win->clear;
+  for (my $i = 0; $i < $maxy; $i++) {
+    my $node = $TREE{list}->[$i];
+    if ($i == $TREE{sel}) { $win->attron(A_REVERSE); }
+    $win->addstring($i, ($node->{depth}-1)*2, $node->{text});
+    if ($i == $TREE{sel}) { $win->attroff(A_REVERSE); }
+    last if ($TREE{top}+$i >= $#{$TREE{list}});
+  }
+}
+
+sub tree_keypress {
+  my ($c, $key) = @_;
+  if ($c eq 'g') {
+    $TREE{sel} = 0;
+    $TREE{top} = 0;
+    tree_redraw;
+  } elsif ($c eq 'G') {
+    $TREE{sel} = $#{$TREE{list}};
+    tree_correct_top;
+    tree_redraw;
+  } elsif (($c eq 'k') && ($TREE{sel} > 0)) {
+    $TREE{sel}--;
+    tree_correct_top;
+    tree_redraw;
+  } elsif (($c eq 'j') && ($TREE{sel} < $#{$TREE{list}})) {
+    $TREE{sel}++;
+    tree_correct_top;
+    tree_redraw;
+  } elsif ($c eq "\n") {
+    if ($#{$TREE{list}->[$TREE{sel}]->{games}} == 0) {
+      game_show $TREE{win}, $TREE{list}->[$TREE{sel}]->{games}->[0];
+    } elsif ($TREE{list}->[$TREE{sel}]->{expanded}) {
+      tree_collapse_node $TREE{sel};
+    } else {
+      tree_expand_node $TREE{sel};
+    }
+    tree_redraw;
+  }
+}
+
+sub tree_show {
+  my $win = shift;
+
+  $TREE{win} = $win;
+  if (!defined($TREE{root})) {
+    tree_create;
+  }
+  tree_redraw;
+
+  my ($c, $key);
+  while (!($c eq 'q')) {
+    ($c, $key) = $win->getchar();
+    tree_keypress $c, $key;
+  }
+}
+
 # LIST VIEW
 
 sub list_correct_top {
@@ -288,6 +448,9 @@ sub list_keypress {
   } elsif (($c eq 'j') && ($LIST{sel} < $#$GAMES)) {
     $LIST{sel}++;
     list_correct_top;
+    list_redraw;
+  } elsif ($c eq "t") {
+    tree_show $LIST{win};
     list_redraw;
   } elsif ($c eq "\n") {
     game_show $LIST{win}, $LIST{sel};

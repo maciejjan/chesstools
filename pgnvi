@@ -43,45 +43,6 @@ $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array
 #        jr = e4
 #        ju = e5
 #        vdi = Nc6
-# TODO views for browsing all games in the file
-# - list view
-#   - keybindings:
-#     - k/j: go up/down
-#     - t: switch to tree view
-#   - data structure: list view
-#     - current element
-#     - top
-#   - functions:
-#     - list_show
-#     - list_redraw
-#     - list_keypress
-# - tree view
-#   - keybindings:
-#     - k/j: go up/down
-#     - h/l/<CR>: collapse/expand the current node
-#     - p: go to parent node
-#     - g: go to root
-#     - c: collapse all except the path to current node
-#     - t: switch to list view
-#     - l/<CR>: open game
-#     - v: toggle the board
-#   - data structure: tree node:
-#     - currently expanded?
-#     - move number
-#     - list of moves
-#     - list of matching game IDs
-#     - children (initially empty)
-#   - data structure: tree view
-#     - current 
-#   - functions:
-#     - tree_expand
-#     - tree_make_children
-#     - tree_show
-#     - tree_redraw
-#     - tree_keypress
-# - game view
-#   - keybindings:
-#     - v: toggle the board
 # FIXME bugs:
 # - if a board window is closed, pgnvi still tries to write to the pipe and
 #   crashes

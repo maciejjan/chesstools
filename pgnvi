@@ -225,11 +225,14 @@ sub tree_make_children {
   }
   for my $key (keys %{$node->{children}}) {
     $n = $#{$node->{children}->{$key}->{games}}+1;
+    my $child = $node->{children}->{$key};
+    my $mn = int(($child->{depth}+1)/2);
+    my $mt = "$mn. ".($child->{depth} % 2 == 0 ? ".." : "") . $key;
     if ($n > 1) {
-      $node->{children}->{$key}->{text} = "+ $key ($n)";
+      $child->{text} = "+ $mt ($n)";
     } else {
-      my $game = $GAMES->[$node->{children}->{$key}->{games}->[0]];
-      $node->{children}->{$key}->{text} = "* $key: " . format_game $game;
+      my $game = $GAMES->[$child->{games}->[0]];
+      $child->{text} = "* $mt: " . format_game $game;
     }
   }
 }
@@ -243,8 +246,10 @@ sub tree_create {
   $TREE{root} = $root;
 
   $TREE{list} = [];
-  for my $childkey (sort keys %{$root->{children}}) {
-    push @{$TREE{list}}, $root->{children}->{$childkey};
+  for my $key (sort { $#{$root->{children}->{$b}->{games}}
+                      <=> $#{$root->{children}->{$a}->{games}}
+                    } keys %{$root->{children}}) {
+    push @{$TREE{list}}, $root->{children}->{$key};
   }
 }
 
@@ -265,7 +270,9 @@ sub tree_get_visible_subtree {
   my $node = shift;
   my @result = ($node);
   if ($node->{expanded}) {
-    for my $key (sort keys %{$node->{children}}) {
+    for my $key (sort { $#{$node->{children}->{$b}->{games}}
+                        <=> $#{$node->{children}->{$a}->{games}}
+                      } keys %{$node->{children}}) {
       my $child = $node->{children}->{$key};
       splice @result, @result, 0, tree_get_visible_subtree($child);
     }
@@ -298,6 +305,17 @@ sub tree_collapse_node {
   splice @{$TREE{list}}, ($i+1), ($j-$i-1);
 }
 
+sub tree_correct_top {
+  my ($maxy, $maxx);
+  $TREE{win}->getmaxyx($maxy, $maxx);
+
+  if ($TREE{sel} < $TREE{top}) {
+    $TREE{top} = $TREE{sel};
+  } elsif ($TREE{sel} >= $TREE{top}+$maxy) {
+    $TREE{top} = $TREE{sel}-$maxy+1;
+  }
+}
+
 sub tree_redraw {
   my $win = $TREE{win};
   my $i = 0;
@@ -307,10 +325,10 @@ sub tree_redraw {
 
   $win->clear;
   for (my $i = 0; $i < $maxy; $i++) {
-    my $node = $TREE{list}->[$i];
-    if ($i == $TREE{sel}) { $win->attron(A_REVERSE); }
+    my $node = $TREE{list}->[$TREE{top}+$i];
+    if ($TREE{top}+$i == $TREE{sel}) { $win->attron(A_REVERSE); }
     $win->addstring($i, ($node->{depth}-1)*2, $node->{text});
-    if ($i == $TREE{sel}) { $win->attroff(A_REVERSE); }
+    if ($TREE{top}+$i == $TREE{sel}) { $win->attroff(A_REVERSE); }
     last if ($TREE{top}+$i >= $#{$TREE{list}});
   }
 }

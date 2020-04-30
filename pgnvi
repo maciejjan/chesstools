@@ -20,7 +20,7 @@ our %TREE = (
   list => undef,
 );
 
-our @LIST_FIELDS = ("White", "Black", "Year", "Result", "ECO");
+our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 
 our $BOARDCMD = "perl drawboard";
 
@@ -57,6 +57,8 @@ sub get_field_for_game {
   my ($field, $idx) = @_;
   if ($field eq "Year") {
     return substr $GAMES->[$idx]->{Date}, 0, 4;
+  } elsif ($field eq "No") {
+    return $idx+1;
   } elsif ($field eq "keys") { # for debug purposes only
     return join(",",(keys %{$GAMES->[$idx]}));
   } elsif ($field eq "moves") { # for debug purposes only
@@ -113,7 +115,6 @@ sub game_draw_moves_list {
   my ($cx, $cy) = ($x1, $y1);
 
   my $last_move_idx = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
-  $win->addstring(30, 0, "!".$GAME{move}."!".$last_move_idx);
 
   for (my $i = 0; $i <= $#$moves; $i++) {
     my $mn = int($i/2+1).".";
@@ -405,7 +406,7 @@ sub list_redraw {
   my $lines = format_list($LIST{top}, $bottom);
   for ($i = 0; $i <= $#$lines; $i++) {
     if ($LIST{top}+$i == $LIST{sel}) { $win->attron(A_REVERSE); }
-    $win->addstring($i, 0, $LIST{sel}." ".$#$GAMES." ".$lines->[$i]);
+    $win->addstring($i, 0, $lines->[$i]);
     if ($LIST{top}+$i == $LIST{sel}) { $win->attroff(A_REVERSE); }
   }
 }

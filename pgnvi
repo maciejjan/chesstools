@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 use Curses;
+use Try::Tiny;
 use utf8;
 
 use Chess::Rep;
@@ -223,6 +224,7 @@ sub game_show {
 sub tree_make_children {
   my $node = shift;
 
+  # create the child nodes
   $node->{children} = {};
   for my $idx (@{$node->{games}}) {
     my $move = $GAMES->[$idx]->{GameMoves}->[$node->{depth}];
@@ -234,6 +236,7 @@ sub tree_make_children {
     }
     push @{$node->{children}->{$move}->{games}}, $idx;
   }
+  # add the text descriptions of the nodes (like e.g. "+ 1. ..e6 (10)")
   for my $key (keys %{$node->{children}}) {
     $n = $#{$node->{children}->{$key}->{games}}+1;
     my $child = $node->{children}->{$key};
@@ -246,10 +249,22 @@ sub tree_make_children {
       $child->{text} = "* $mt: " . format_game $game;
     }
   }
+  # add the positions
+  my $pos = new Chess::Rep;
+  for my $key (keys %{$node->{children}}) {
+    $pos->set_from_fen($node->{pos});
+    try {
+      $pos->go_move($key);
+    };
+    $node->{children}->{$key}->{pos} = $pos->get_fen;
+  }
 }
 
 sub tree_create {
-  my $root = { expanded => 1, depth => 0, games => [], children => undef };
+  my $root = {
+    expanded => 1, depth => 0, games => [], children => undef,
+    pos => "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  };
   for ($i = 0; $i <= $#$GAMES; $i++) {
     push @{$root->{games}}, $i;
   }
@@ -342,6 +357,9 @@ sub tree_redraw {
     if ($TREE{top}+$i == $TREE{sel}) { $win->attroff(A_REVERSE); }
     last if ($TREE{top}+$i >= $#{$TREE{list}});
   }
+  if (($BOARD) && ($BOARD->opened)) {
+    print $BOARD $TREE{list}->[$TREE{sel}]->{pos}."\n";
+  }
 }
 
 sub tree_keypress {
@@ -362,6 +380,13 @@ sub tree_keypress {
     $TREE{sel}++;
     tree_correct_top;
     tree_redraw;
+  } elsif ($c eq 'v') {
+    if (($BOARD) && ($BOARD->opened)) {
+      board_close;
+    } else {
+      board_open;
+      tree_redraw;
+    }
   } elsif ($c eq "\n") {
     if ($#{$TREE{list}->[$TREE{sel}]->{games}} == 0) {
       game_show $TREE{win}, $TREE{list}->[$TREE{sel}]->{games}->[0];

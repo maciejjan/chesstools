@@ -20,7 +20,7 @@ The tools use existing Perl modules for manipulating chess data, namely
 
 TODO
 
-# Examples
+# Pipe examples
 
 The simplest useful pipe is:
 ```
@@ -46,6 +46,16 @@ will prevent it from terminating when the input stream is closed:
 ```
 echo "d4 Nf6 c4 e6 Nf3 b6 e3 Bb7" | makemoves | drawboard -l
 ```
+
+If you want to maintain a history of seen positions while moving the pieces
+around, for example to be able to revert to a previous one, you only need to
+pipe through `tee`:
+```
+makemoves | tee positions.txt | drawboard
+```
+
+If you enter a valid FEN position into `makemoves`, it will reset to it and
+output it.
 
 # pgnvi
 

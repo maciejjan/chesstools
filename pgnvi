@@ -11,6 +11,7 @@ our $BOARD;
 
 our %LIST = (
   sel => 0,
+  top => 0,
 );
 
 our @LIST_FIELDS = ("White", "Black", "Year", "Result", "ECO");
@@ -82,7 +83,7 @@ $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array
 sub format_game {
   my $game = shift;
   my $year = substr $game->{Date}, 0, 4;
-  return $game->{White}." -- ".$game->{Black}." ($year) -- ".$game->{Result}." -- ".$game->{ECO};
+  return $game->{White}." — ".$game->{Black}." ($year) — ".$game->{Result};
 }
 
 sub get_field_for_game {
@@ -306,6 +307,8 @@ sub list_show {
     list_keypress $c, $key;
   }
 }
+
+# MAIN BODY
 
 my $win = new Curses;
 

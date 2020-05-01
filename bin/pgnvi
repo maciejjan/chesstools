@@ -269,17 +269,29 @@ sub game_show {
 sub tree_make_children {
   my $node = shift;
 
+  my %illegal = ();
+
   # create the child nodes
   $node->{children} = {};
+  my $pos = new Chess::Rep;
   for my $idx (@{$node->{games}}) {
     my $move = $GAMES->[$idx]->{GameMoves}->[$node->{depth}];
-    if (!defined($node->{children}->{$move})) {
-      $node->{children}->{$move} = {
-        expanded => 0, depth => $node->{depth}+1,
-        games => [], children => undef, text => undef
-      };
+    if ((!defined($node->{children}->{$move}))
+       && (!defined($illegal{$move}))) {
+      try {
+        $pos->set_from_fen($node->{pos});
+        $pos->go_move($move);
+        $node->{children}->{$move} = {
+          expanded => 0, depth => $node->{depth}+1, games => [],
+          children => undef, text => undef, pos => $pos->get_fen
+        }
+      } catch {
+        $illegal{$move} = 1;
+      }
     }
-    push @{$node->{children}->{$move}->{games}}, $idx;
+    if (defined($node->{children}->{$move})) {
+      push @{$node->{children}->{$move}->{games}}, $idx;
+    }
   }
   # add the text descriptions of the nodes (like e.g. "+ 1. ..e6 (10)")
   for my $key (keys %{$node->{children}}) {
@@ -293,15 +305,6 @@ sub tree_make_children {
       my $game = $GAMES->[$child->{games}->[0]];
       $child->{text} = "* $mt: " . format_game $game;
     }
-  }
-  # add the positions
-  my $pos = new Chess::Rep;
-  for my $key (keys %{$node->{children}}) {
-    $pos->set_from_fen($node->{pos});
-    try {
-      $pos->go_move($key);
-    };
-    $node->{children}->{$key}->{pos} = $pos->get_fen;
   }
 }
 

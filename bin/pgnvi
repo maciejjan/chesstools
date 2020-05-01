@@ -30,6 +30,11 @@ $pgn = new Chess::PGN::Parse "$ARGV[0]"
 $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array'});
 
 # TODO (for v 0.1)
+# - improvements in the tree view:
+#   - compress nodes with only one child
+# - list & tree view
+#   - searching
+#   - filtering
 # - scrolling of the move list
 # - variants
 # - wrapping comments
@@ -368,6 +373,18 @@ sub tree_keypress {
     $TREE{sel}++;
     tree_correct_top;
     tree_redraw;
+  } elsif ($c eq 'h') {
+    my $node = $TREE{list}->[$TREE{sel}];
+    if (($#{$node->{games}} > 0) && ($node->{expanded})) {
+      tree_collapse_node $TREE{sel};
+      tree_redraw;
+    }
+  } elsif ($c eq 'l') {
+    my $node = $TREE{list}->[$TREE{sel}];
+    if (($#{$node->{games}} > 0) && (!$node->{expanded})) {
+      tree_expand_node $TREE{sel};
+      tree_redraw;
+    }
   } elsif ($c eq 'b') {
     if (($BOARD) && ($BOARD->opened)) {
       board_close;
@@ -375,7 +392,7 @@ sub tree_keypress {
       board_open;
       tree_redraw;
     }
-  } elsif ($c eq "\n") {
+  } elsif ($c eq "\n" || $c eq " ") {
     if ($#{$TREE{list}->[$TREE{sel}]->{games}} == 0) {
       my $game_idx = $TREE{list}->[$TREE{sel}]->{games}->[0];
       my $move = $TREE{list}->[$TREE{sel}]->{depth};

@@ -23,7 +23,7 @@ our %TREE = (
 
 our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 
-our $BOARDCMD = "perl drawboard";
+our $BOARDCMD = "drawboard";
 
 $pgn = new Chess::PGN::Parse "$ARGV[0]"
   || die "Could not open file: $ARGV[0]";
@@ -107,6 +107,12 @@ sub board_close {
   close $BOARD;
 }
 
+sub board_close_if_open {
+  if (($BOARD) && ($BOARD->opened)) {
+    board_close;
+  }
+}
+
 # GAME VIEW
 
 sub game_precompute_positions {
@@ -166,7 +172,7 @@ sub game_redraw {
   game_draw_moves_list 0, 0, 40, 20;
   #game_draw_comments 0, 20, 40, 40;
   if (($BOARD) && ($BOARD->opened)) {
-    print $BOARD $GAME{pos}->get_fen."\n";
+    print $BOARD $GAME{positions}->[$GAME{move}]."\n";
   }
 }
 
@@ -177,21 +183,17 @@ sub game_keypress {
 
   if ($c eq 'g') {
     $GAME{move} = 0;
-    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{move}]);
     game_redraw;
   } elsif ($c eq 'G') {
     $GAME{move} = $last_move_idx;
-    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{move}]);
     game_redraw;
   } elsif ($c eq 'j') {
     if ($GAME{move} < $last_move_idx) { $GAME{move}++; }
-    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{move}]);
     game_redraw;
   } elsif ($c eq 'k') {
     if ($GAME{move} > 0) { $GAME{move}--; }
-    $GAME{pos}->set_from_fen($GAME{positions}->[$GAME{move}]);
     game_redraw;
-  } elsif ($c eq 'v') {
+  } elsif ($c eq 'b') {
     if (($BOARD) && ($BOARD->opened)) {
       board_close;
     } else {
@@ -204,8 +206,10 @@ sub game_keypress {
 sub game_show {
   my $win = shift;
   my $idx = shift;
+  my $move = shift;
 
-  %GAME = (win => $win, idx => $idx, move => 0, board => 0, pos => new Chess::Rep);
+  if (!defined($move)) { $move = 0; }
+  %GAME = (win => $win, idx => $idx, move => $move, board => 0);
   game_precompute_positions;
   game_redraw;
 
@@ -213,9 +217,6 @@ sub game_show {
   while (!($c eq 'q')) {
     ($c, $key) = $win->getchar();
     game_keypress $c, $key;
-  }
-  if (($BOARD) && ($BOARD->opened)) {
-    close $BOARD;
   }
 }
 
@@ -380,7 +381,7 @@ sub tree_keypress {
     $TREE{sel}++;
     tree_correct_top;
     tree_redraw;
-  } elsif ($c eq 'v') {
+  } elsif ($c eq 'b') {
     if (($BOARD) && ($BOARD->opened)) {
       board_close;
     } else {
@@ -389,7 +390,9 @@ sub tree_keypress {
     }
   } elsif ($c eq "\n") {
     if ($#{$TREE{list}->[$TREE{sel}]->{games}} == 0) {
-      game_show $TREE{win}, $TREE{list}->[$TREE{sel}]->{games}->[0];
+      my $game_idx = $TREE{list}->[$TREE{sel}]->{games}->[0];
+      my $move = $TREE{list}->[$TREE{sel}]->{depth};
+      game_show $TREE{win}, $game_idx, $move;
     } elsif ($TREE{list}->[$TREE{sel}]->{expanded}) {
       tree_collapse_node $TREE{sel};
     } else {
@@ -466,9 +469,11 @@ sub list_keypress {
     list_redraw;
   } elsif ($c eq "t") {
     tree_show $LIST{win};
+    board_close_if_open;
     list_redraw;
   } elsif ($c eq "\n") {
     game_show $LIST{win}, $LIST{sel};
+    board_close_if_open;
     list_redraw;
   }
 }

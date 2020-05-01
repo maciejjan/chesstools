@@ -24,6 +24,7 @@ our %TREE = (
 our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 
 our $BOARDCMD = "drawboard";
+our $YANKCMD = "xclip -i";
 
 $pgn = new Chess::PGN::Parse "$ARGV[0]"
   || die "Could not open file: $ARGV[0]";
@@ -52,6 +53,14 @@ $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array
 # FIXME bugs:
 # - if a board window is closed, pgnvi still tries to write to the pipe and
 #   crashes
+
+sub yank {
+  my $arg = shift;
+  if (open(my $pipe, "|-:encoding(UTF-8)", $YANKCMD)) {
+    print $pipe $arg;
+    close($pipe);
+  }
+}
 
 sub format_game {
   my $game = shift;
@@ -244,6 +253,8 @@ sub game_keypress {
       board_open;
       game_redraw;
     }
+  } elsif ($c eq 'y') {
+    yank $GAME{positions}->[$GAME{move}];
   }
 }
 
@@ -442,6 +453,8 @@ sub tree_keypress {
       board_open;
       tree_redraw;
     }
+  } elsif ($c eq 'y') {
+    yank $TREE{list}->[$TREE{sel}]->{pos};
   } elsif ($c eq "\n" || $c eq " ") {
     if ($#{$TREE{list}->[$TREE{sel}]->{games}} == 0) {
       my $game_idx = $TREE{list}->[$TREE{sel}]->{games}->[0];

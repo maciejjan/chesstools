@@ -387,8 +387,14 @@ sub tree_redraw {
   $win->clear;
   for (my $i = 0; $i < $maxy; $i++) {
     my $node = $TREE{list}->[$TREE{top}+$i];
+    my $shift = ($node->{depth}-1)*2;
     if ($TREE{top}+$i == $TREE{sel}) { $win->attron(A_REVERSE); }
-    $win->addstring($i, ($node->{depth}-1)*2, $node->{text});
+    if ($shift + length($node->{text}) <= $maxx) {
+      $win->addstring($i, $shift, $node->{text});
+    } else {
+      $win->addstring(
+        $i, $shift, substr($node->{text}, 0, ($maxx-$shift-1)) . "+");
+    }
     if ($TREE{top}+$i == $TREE{sel}) { $win->attroff(A_REVERSE); }
     last if ($TREE{top}+$i >= $#{$TREE{list}});
   }

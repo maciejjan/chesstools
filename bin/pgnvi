@@ -280,19 +280,6 @@ sub tree_create {
   }
 }
 
-sub tree_draw_node {
-  my ($i, $maxy, $key, $node) = @_;
-  my $win = $TREE{win};
-
-  my @node_str = ();
-  for (my $j = 0; $j < $node->{depth}; $j++) {
-    push @node_str, "  ";
-  }
-  push @node_str, ($node->{expanded} ? "-" : "+");
-  push @node_str, " ".$key." (".($#{$node->{games}}+1).")";
-  $win->addstring($i, 0, join("", @node_str));
-}
-
 sub tree_get_visible_subtree {
   my $node = shift;
   my @result = ($node);

@@ -18,7 +18,15 @@ The tools use existing Perl modules for manipulating chess data, namely
 
 # Installation
 
-TODO
+```
+perl Makefile.PL
+make
+make install
+```
+
+See `Makefile.PL` for a list of dependencies. Currently the scripts are
+self-contained, so they will work without installing as well (just run them),
+but this may change in the future.
 
 # Pipe examples
 

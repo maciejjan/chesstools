@@ -130,6 +130,32 @@ sub game_precompute_positions {
   }
 }
 
+sub game_draw_header {
+  my ($x1, $y1, $x2, $y2) = @_;
+  my $win = $GAME{win};
+  my @lines = ();
+
+  my $game = $GAMES->[$GAME{idx}];
+  my $white = $game->{White} .
+              ($game->{WhiteTitle} ? " $game->{WhiteTitle}" : "") .
+              ($game->{WhiteElo} ? " ($game->{WhiteElo})" : "");
+  my $black = $game->{Black} .
+              ($game->{BlackTitle} ? " $game->{BlackTitle}" : "") .
+              ($game->{BlackElo} ? " ($game->{BlackElo})" : "");
+  push @lines, "$white — $black";
+  push @lines, "$game->{Event}" .
+               ($game->{Round} ? " round $game->{Round}" : "");
+  push @lines, "$game->{Site} $game->{Date}";
+  push @lines, "$game->{ECO} $game->{Opening}";
+
+  my $center = int(($x2-$x1)/2);
+  $win->attron(A_BOLD);
+  for (my $j = 0; $j <= $#lines; $j++) {
+    $win->addstring($j, int($center-length($lines[$j])/2), $lines[$j]);
+  }
+  $win->attroff(A_BOLD);
+}
+
 sub game_draw_moves_list {
   my ($x1, $y1, $x2, $y2) = @_;
 
@@ -155,6 +181,10 @@ sub game_draw_moves_list {
     $cx += length($moves->[$i]) + 1;
     if ($i+1 == $GAME{move}) { $win->attroff(A_REVERSE); }
   }
+  # append the result to the moves list
+  my $result = $GAMES->[$GAME{idx}]->{Result};
+  if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
+  $win->addstring($cy, $cx, $result);
 }
 
 sub game_draw_comments {
@@ -173,9 +203,16 @@ sub game_draw_comments {
 }
 
 sub game_redraw {
+  my ($maxy, $maxx);
+  $GAME{win}->getmaxyx($maxy, $maxx);
+
   $GAME{win}->clear;
-  game_draw_moves_list 0, 0, 40, 20;
-  #game_draw_comments 0, 20, 40, 40;
+
+  game_draw_header 0, 0, $maxx, 5;
+  game_draw_moves_list 0, 5, $maxx, 15;
+  #game_draw_comments 0, 15, $maxx, 20;
+
+  # print the position to the board
   if (($BOARD) && ($BOARD->opened)) {
     print $BOARD $GAME{positions}->[$GAME{move}]."\n";
   }

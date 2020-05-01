@@ -1683,7 +1683,7 @@ sub draw {
 
   # Determine the subsampling rate of the piece images. If it differs
   # from the previous one, resample them.
-  my $new_subsample = int(300 / ($size*0.94));
+  my $new_subsample = int(300 / ($size*0.8));
   if ($new_subsample < 1) { $new_subsample = 1; }
   if ($new_subsample != $subsample) {
     $subsample = $new_subsample;
@@ -1734,6 +1734,8 @@ sub handle_input {
 
 $main->bind("<Configure>", \&draw);
 $main->aspect(1, 1, 1, 1);
+$main->minsize(300, 300);
+$main->geometry("600x600");
 $main->fileevent(STDIN, 'readable', \&handle_input);
 
 $main->MainLoop;

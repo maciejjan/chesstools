@@ -16,6 +16,7 @@ our %COLORS = (
 );
 
 our $POSITION = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+our $REVERSED = 0;
 
 # the PNG image containing all pieces, 1800x600px (each piece is 300x300)
 our $PIECES_SPRITE = <<ENDSPRITE
@@ -1708,8 +1709,10 @@ sub draw {
     if ($_ eq "/") { $i = 0; $j++; }
     elsif ($_ =~ /[0-9]/) { $i += int($_); }
     elsif ($_ =~ /[KQBNRPkqbnrp]/) {
+      my $x = $REVERSED ? (7-$i) : $i;
+      my $y = $REVERSED ? (7-$j) : $j;
       $canvas->createImage(
-        ($i+0.5)*$size, ($j+0.5)*$size,
+        ($x+0.5)*$size, ($y+0.5)*$size,
         -anchor => "c", -image => $_
       );
       $i++;
@@ -1732,7 +1735,13 @@ sub handle_input {
   }
 }
 
+sub reverse {
+  $REVERSED = 1-$REVERSED;
+  draw;
+}
+
 $main->bind("<Configure>", \&draw);
+$main->bind("<Key-space>", \&reverse);
 $main->aspect(1, 1, 1, 1);
 $main->minsize(300, 300);
 $main->geometry("600x600");

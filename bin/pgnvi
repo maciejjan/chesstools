@@ -223,7 +223,9 @@ sub game_keypress {
 
   my $last_move_idx = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
 
-  if ($c eq 'g') {
+  if ($key == KEY_RESIZE) {
+    game_redraw;
+  } elsif ($c eq 'g') {
     $GAME{move} = 0;
     game_redraw;
   } elsif ($c eq 'G') {
@@ -394,7 +396,9 @@ sub tree_redraw {
 
 sub tree_keypress {
   my ($c, $key) = @_;
-  if ($c eq 'g') {
+  if ($key == KEY_RESIZE) {
+    tree_redraw;
+  } elsif ($c eq 'g') {
     $TREE{sel} = 0;
     $TREE{top} = 0;
     tree_redraw;
@@ -492,7 +496,9 @@ sub list_redraw {
 
 sub list_keypress {
   my ($c, $key) = @_;
-  if ($c eq 'g') {
+  if ($key == KEY_RESIZE) {
+    list_redraw;
+  } elsif ($c eq 'g') {
     $LIST{sel} = 0;
     $LIST{top} = 0;
     list_redraw;

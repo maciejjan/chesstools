@@ -62,8 +62,8 @@ browsing large databases.
 * **j**/**k** - go down/up
 * **l**/**h** - expand/collapse node
 * **b** - toggle board
-* **<Space>**/**<Enter>** (on a non-leaf node) - toggle expand/collapse node
-* **<Enter>** (on a leaf node) - open game
+* **\<Space\>**/**\<Enter\>** (on a non-leaf node) - toggle expand/collapse node
+* **\<Enter\>** (on a leaf node) - open game
 * **q** - quit the tree view
 
 ## Game view
@@ -94,9 +94,9 @@ append the moves to the end of the sequence.
 
 In the append mode, the following bindings are used:
 
-* **<Backspace>** - delete the last character
-* **<Space>** - append the current move and move on to the next one
-* **<Enter>** - leave append mode
+* **\<Backspace\>** - delete the last character
+* **\<Space\>** - append the current move and move on to the next one
+* **\<Enter\>** - leave append mode
 
 Moves are input using the keyboard, but in a highly non-standard layout, which
 looks like this:
@@ -110,8 +110,8 @@ looks like this:
   +-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+
 ```
 
-\*) furthermore, **<Shift>-T** gives `#` (checkmate) and **<Shift-Y>** gives
-`O-O-O` (queenside castle).
+\*) furthermore, **\<Shift-T\>** gives `#` (checkmate) and **\<Shift-Y\>**
+gives `O-O-O` (queenside castle).
 
 The home row index finger keys (F/J on standard US keyboard) are thus bound to
 "d/e". For example, the move `Nf3` would be input by the key sequence `.ke` or

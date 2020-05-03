@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+
+use warnings;
+use Chess::PGN::Parse;
+use Chess::Rep;
+use Try::Tiny;
+
+$pgn = new Chess::PGN::Parse "$ARGV[0]"
+  || die "Could not open file: $ARGV[0]";
+$pos = new Chess::Rep;
+
+while ($pgn->read_game()) {
+  try {
+    $pgn->smart_parse_game();
+    my $tags = $pgn->tags;
+    for my $key (keys %$tags) {
+      if (!($key eq "Game")) {
+        print "[$key \"$tags->{$key}\"]\n";
+      }
+    }
+    print "\n";
+
+    # TODO set the initial position if given in the metadata
+    $pos->set_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    $moves = $pgn->moves;
+    for (my $i = 0; $i < $#{$moves}; $i++) {
+      $pos->go_move($moves->[$i]);
+      if ($i % 2 == 0) { print "".($i/2+1).". "; } else { print ".."; }
+      print $moves->[$i] . "\t" . $pos->get_fen . "\n";
+    }
+    print "\n";
+  };
+}

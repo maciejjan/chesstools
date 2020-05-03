@@ -26,8 +26,10 @@ our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 our $BOARDCMD = "drawboard";
 our $YANKCMD = "xclip -i";
 
-$pgn = new Chess::PGN::Parse "$ARGV[0]"
-  || die "Could not open file: $ARGV[0]";
+our $FILENAME = $ARGV[0];
+
+$pgn = new Chess::PGN::Parse "$FILENAME"
+  || die "Could not open file: $FILENAME";
 $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array'});
 
 # TODO (for v 0.1)
@@ -51,8 +53,6 @@ $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array
 #        ju = e5
 #        vdi = Nc6
 # TODO append mode:
-# - append + for check, # for mate (manually / automatically?)
-# - saving the file
 # - deleting from the current move to the end
 # - undo append/delete
 # TODO metadata editing mode
@@ -66,6 +66,40 @@ sub yank {
     print $pipe $arg;
     close($pipe);
   }
+}
+
+sub number_moves {
+  my $mn = 0;
+  my @result = ();
+  while (my $move = shift @_) {
+    if ($mn % 2 == 0) {
+      push @result, int($mn/2+1).".";
+    }
+    push @result, $move;
+    $mn++;
+  }
+  return @result;
+}
+
+sub print_game {
+  my $fh = shift;
+  my $game = shift;
+  for my $key (keys %$game) {
+    if (($key =~ /^[A-Z].*/) && ($key !~ /Game.*/)) {
+      print $fh "[$key \"$game->{$key}\"]\n";
+    }
+  }
+  print $fh "\n";
+  print $fh (join " ", number_moves(@{$game->{GameMoves}}))."\n\n";
+}
+
+sub save {
+  my $filename = shift;
+  open $fh, "+>", $filename;
+  for my $game (@$GAMES) {
+    print_game $fh, $game;
+  }
+  close $fh;
 }
 
 sub format_game {
@@ -319,6 +353,8 @@ sub game_keypress {
     }
   } elsif ($c eq 'y') {
     yank $GAME{positions}->[$GAME{move}];
+  } elsif ($c eq 's') {
+    save $FILENAME;
   }
 }
 

@@ -42,19 +42,6 @@ $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array
 # - variants
 # - wrapping comments
 # - editing comments with $EDITOR
-# TODO: input -- two modes:
-# - "normal" - input the fields like they are on the keyboard
-# - "expert":
-#   ASDFJKL: = ABCDEFGH
-#   QWERUIOP = 12345678
-#   CVBNM    = RNBQK
-#   e.g. vje = Nf3
-#        jr = e4
-#        ju = e5
-#        vdi = Nc6
-# TODO append mode:
-# - deleting from the current move to the end
-# - undo append/delete
 # TODO metadata editing mode
 # FIXME bugs:
 # - if a board window is closed, pgnvi still tries to write to the pipe and
@@ -312,6 +299,7 @@ sub game_append_keypress {
       $GAME{pos}->go_move($GAME{append});
       push @{$GAMES->[$GAME{idx}]->{GameMoves}}, $GAME{append};
       push @{$GAME{positions}}, $GAME{pos}->get_fen;
+      push @{$GAME{changes}->[$#{$GAME{changes}}]->{added}}, $GAME{append};
       $GAME{append} = "";
       $GAME{move} = $#{$GAME{positions}};
     };
@@ -328,10 +316,6 @@ sub game_keypress {
     game_append_keypress $c, $key;
   } elsif ($key == KEY_RESIZE) {
     game_redraw;
-  } elsif ($c eq 'a') {
-    # enter the append mode
-    $GAME{append} = "";
-    game_redraw;
   } elsif ($c eq 'g') {
     $GAME{move} = 0;
     game_redraw;
@@ -344,6 +328,35 @@ sub game_keypress {
   } elsif ($c eq 'k') {
     if ($GAME{move} > 0) { $GAME{move}--; }
     game_redraw;
+  } elsif ($c eq 'a') {
+    # enter the append mode
+    $GAME{append} = "";
+    push @{$GAME{changes}}, { added => [], deleted => [] };
+    game_redraw;
+  } elsif ($c eq 'A') {
+    # delete everything behind the cursor and enter the append mode
+    my @del = splice @{$GAMES->[$GAME{idx}]->{GameMoves}}, $GAME{move};
+    splice @{$GAME{positions}}, ($GAME{move}+1);
+    push @{$GAME{changes}}, { added => [], deleted => \@del };
+    $GAME{append} = "";
+    game_redraw;
+  } elsif ($c eq 'u') {
+    # undo the last append
+    if (length @{$GAME{changes}} > 0) {
+      my $change = pop @{$GAME{changes}};
+      my $len = $#{$change->{added}}+1;
+      my $offset = ($#{$GAMES->[$GAME{idx}]->{GameMoves}}+1) - $len;
+      splice @{$GAMES->[$GAME{idx}]->{GameMoves}}, $offset, $len,
+        @{$change->{deleted}};
+      splice @{$GAME{positions}}, ($offset+1);
+      $GAME{pos}->set_from_fen($GAME{positions}->[$offset]);
+      for (my $i = $offset; $i <= $#{$GAMES->[$GAME{idx}]->{GameMoves}}; $i++) {
+        $GAME{pos}->go_move($GAMES->[$GAME{idx}]->{GameMoves}->[$i]);
+        push @{$GAME{positions}}, $GAME{pos}->get_fen;
+      }
+      $GAME{move} = $offset;
+      game_redraw;
+    }
   } elsif ($c eq 'b') {
     if (($BOARD) && ($BOARD->opened)) {
       board_close;
@@ -364,7 +377,9 @@ sub game_show {
   my $move = shift;
 
   if (!defined($move)) { $move = 0; }
-  %GAME = (win => $win, idx => $idx, move => $move, board => 0, append => undef);
+  %GAME = (
+    win => $win, idx => $idx, move => $move, board => 0,
+    append => undef, changes => []);
   game_precompute_positions;
   game_redraw;
 

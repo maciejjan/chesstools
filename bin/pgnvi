@@ -283,15 +283,15 @@ sub game_append_keypress {
     # exit the append mode
     undef $GAME{append};
     game_redraw;
-  } elsif ($c =~ /[qweruiopasdfjkl;zxcvm,.\/=nty]/) {
-    $c =~ tr/qweruiopasdfjkl;zxcvm,.\/=nty/12345678abcdefghRNBQKBNR=x+#/;
+  } elsif ($c =~ /[qweruiopasdfjkl;zxcvm,.\/=ntT]/) {
+    $c =~ tr/qweruiopasdfjkl;zxcvm,.\/=ntT/12345678abcdefghRNBQKBNR=x+#/;
     $GAME{append} .= $c;
     game_redraw;
-  } elsif ($c eq 'g') {
-    $GAME{append} .= "O-O-O";
-    game_redraw;
-  } elsif ($c eq 'h') {
+  } elsif ($c eq 'y') {
     $GAME{append} .= "O-O";
+    game_redraw;
+  } elsif ($c eq 'Y') {
+    $GAME{append} .= "O-O-O";
     game_redraw;
   } elsif ($c eq ' ') {
     try {

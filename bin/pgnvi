@@ -26,6 +26,10 @@ our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 our $BOARDCMD = "drawboard";
 our $YANKCMD = "xclip -i";
 
+if (($#ARGV < 0) || ($ARGV[0] eq "-h") || ($ARGV[0] eq "--help")) {
+  die "usage: pgnvi PGN_FILE";
+}
+
 our $FILENAME = $ARGV[0];
 
 $pgn = new Chess::PGN::Parse "$FILENAME"

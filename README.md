@@ -46,7 +46,7 @@ implemented.
 * **g**/**G** - go to beginning/end
 * **j**/**k** - go down/up
 * **t** - open tree view
-* **<Enter>** - open game
+* **\<Enter\>** - open game
 * **q** - quit program
 
 ## Tree view

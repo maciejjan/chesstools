@@ -50,6 +50,12 @@ $GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array
 #        jr = e4
 #        ju = e5
 #        vdi = Nc6
+# TODO append mode:
+# - append + for check, # for mate (manually / automatically?)
+# - saving the file
+# - deleting from the current move to the end
+# - undo append/delete
+# TODO metadata editing mode
 # FIXME bugs:
 # - if a board window is closed, pgnvi still tries to write to the pipe and
 #   crashes
@@ -131,11 +137,11 @@ sub board_close_if_open {
 
 sub game_precompute_positions {
   my $moves = $GAMES->[$GAME{idx}]->{GameMoves};
-  my $pos = new Chess::Rep;
-  $GAME{positions} = [$pos->get_fen];
+  $GAME{pos} = new Chess::Rep;
+  $GAME{positions} = [$GAME{pos}->get_fen];
   for (my $i = 0; $i <= $#$moves; $i++) {
-    $pos->go_move($moves->[$i]);
-    push @{$GAME{positions}}, $pos->get_fen;
+    $GAME{pos}->go_move($moves->[$i]);
+    push @{$GAME{positions}}, $GAME{pos}->get_fen;
   }
 }
 
@@ -185,15 +191,34 @@ sub game_draw_moves_list {
       $win->addstring($cy, $cx, "$mn");
       $cx += length($mn) + 1;
     } 
-    if ($i+1 == $GAME{move}) { $win->attron(A_REVERSE); }
+    if (($i+1 == $GAME{move}) && !defined($GAME{append})) {
+      $win->attron(A_REVERSE);
+    }
     $win->addstring($cy, $cx, $moves->[$i]);
     $cx += length($moves->[$i]) + 1;
-    if ($i+1 == $GAME{move}) { $win->attroff(A_REVERSE); }
+    if (($i+1 == $GAME{move}) && !defined($GAME{append})) {
+      $win->attroff(A_REVERSE);
+    }
+  }
+  # append mode cursor
+  # TODO going to the next line if the text exceeds the line width
+  if (defined($GAME{append})) {
+    my $appendstr = $GAME{append} ? $GAME{append} : " ";
+    my $nmoves = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
+    if ($nmoves % 2 == 0) {
+      $appendstr = int($nmoves/2+1). ". " . $appendstr;
+    }
+    $win->attron(A_REVERSE);
+    $win->addstring($cy, $cx, $appendstr);
+    $win->attroff(A_REVERSE);
+    $cx += length($appendstr)+1;
   }
   # append the result to the moves list
-  my $result = $GAMES->[$GAME{idx}]->{Result};
-  if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
-  $win->addstring($cy, $cx, $result);
+  if (defined($GAMES->[$GAME{idx}]->{Result})) {
+    my $result = $GAMES->[$GAME{idx}]->{Result};
+    if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
+    $win->addstring($cy, $cx, $result);
+  }
 }
 
 sub game_draw_comments {
@@ -227,12 +252,51 @@ sub game_redraw {
   }
 }
 
+sub game_append_keypress {
+  my ($c, $key) = @_;
+
+  if ($key == KEY_BACKSPACE) {
+    $GAME{append} = substr $GAME{append}, 0, (length($GAME{append})-1);
+    game_redraw;
+  } elsif ($c eq "\n") {
+    # exit the append mode
+    undef $GAME{append};
+    game_redraw;
+  } elsif ($c =~ /[qweruiopasdfjkl;zxcvm,.\/=nty]/) {
+    $c =~ tr/qweruiopasdfjkl;zxcvm,.\/=nty/12345678abcdefghRNBQKBNR=x+#/;
+    $GAME{append} .= $c;
+    game_redraw;
+  } elsif ($c eq 'g') {
+    $GAME{append} .= "O-O-O";
+    game_redraw;
+  } elsif ($c eq 'h') {
+    $GAME{append} .= "O-O";
+    game_redraw;
+  } elsif ($c eq ' ') {
+    try {
+      $GAME{pos}->set_from_fen($GAME{positions}->[$#{$GAME{positions}}]);
+      $GAME{pos}->go_move($GAME{append});
+      push @{$GAMES->[$GAME{idx}]->{GameMoves}}, $GAME{append};
+      push @{$GAME{positions}}, $GAME{pos}->get_fen;
+      $GAME{append} = "";
+      $GAME{move} = $#{$GAME{positions}};
+    };
+    game_redraw;
+  }
+}
+
 sub game_keypress {
   my ($c, $key) = @_;
 
   my $last_move_idx = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
 
-  if ($key == KEY_RESIZE) {
+  if (defined $GAME{append}) {
+    game_append_keypress $c, $key;
+  } elsif ($key == KEY_RESIZE) {
+    game_redraw;
+  } elsif ($c eq 'a') {
+    # enter the append mode
+    $GAME{append} = "";
     game_redraw;
   } elsif ($c eq 'g') {
     $GAME{move} = 0;
@@ -264,12 +328,12 @@ sub game_show {
   my $move = shift;
 
   if (!defined($move)) { $move = 0; }
-  %GAME = (win => $win, idx => $idx, move => $move, board => 0);
+  %GAME = (win => $win, idx => $idx, move => $move, board => 0, append => undef);
   game_precompute_positions;
   game_redraw;
 
   my ($c, $key);
-  while (!($c eq 'q')) {
+  while (!($c eq 'q') || (defined $GAME{append})) {
     ($c, $key) = $win->getchar();
     game_keypress $c, $key;
   }

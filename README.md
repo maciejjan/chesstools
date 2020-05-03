@@ -9,6 +9,8 @@ The following tools are currently provided:
   draws it,
 - **makemoves** reads moves and outputs the resulting position (also checking
   whether the moves are valid),
+- **pgnindex** annotates PGN files by adding the position in FEN notation after
+  every move, so that they can be searched e.g. by grep(1) or awk(1),
 - **pgnvi** is a curses-based editor for PGN files, allowing for browsing,
   searching, commenting and writing games. A more elaborate description is
   given below.

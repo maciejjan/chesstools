@@ -167,9 +167,9 @@ sub game_new_node {
     mn => 0,
     prev => undef,
     next => undef,
-    nags => [],
+    NAG => [],
     variants => [],
-    comments => []
+    comments => [],
   };
   if (defined($parent)) {
     $node->{prev} = $parent;
@@ -190,20 +190,37 @@ sub game_parse {
 
   my $game = new Chess::PGN::Parse undef, $text;
   $game->read_game;
-  $game->parse_game({save_comments => 'yes', comments_struct => 'array'});
+  $game->parse_game({save_comments => 'yes', comments_struct => 'hol'});
   my $moves = $game->moves;
+  my $comments = $game->comments;
 
   my $root;
   if (!defined($parent)) {
     $root = game_new_node;
   } else {
-    $root = game_new_node (shift @$moves), $parent;
+    my $nextmove = shift @$moves;
+    yank $parent->{pos}->get_fen;
+    $root = game_new_node($nextmove, $parent);
   }
 
   my ($node, $prevnode) = ($root, undef);
   for (@$moves) {
     $prevnode = $node;
     $node = game_new_node $_, $prevnode;
+    my $hmn = int($node->{mn}/2+0.5) . ($node->{mn} % 2 == 1 ? "w" : "b");
+    if (defined($comments->{$hmn}->{NAG})) {
+      $node->{NAG} = $comments->{$hmn}->{NAG};
+    }
+    if (defined($comments->{$hmn}->{RAV})) {
+      for (@{$comments->{$hmn}->{RAV}}) {
+        s/^\(//; s/\)$//;
+        my $childnode = game_parse($_, $node->{prev});
+        push @{$node->{variants}}, $childnode;
+      }
+    }
+    if (defined($comments->{$hmn}->{brace})) {
+      $node->{comments} = $comments->{$hmn}->{brace};
+    }
     $prevnode->{next} = $node;
   }
   return $root;
@@ -291,21 +308,29 @@ sub game_draw_moves_list {
     if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
     $win->addstring($cy, $cx, $result);
   }
+  return $cy;
+}
+
+sub game_draw_variants {
+  my ($x1, $y1, $x2, $y2) = @_;
+
+  my $j = 0;
+  for (@{$GAME{curmove}->{variants}}) {
+    $GAME{win}->addstring($y1+$j++, $x1, $_->{move});
+  }
+  return $y1+$j;
 }
 
 sub game_draw_comments {
   my ($x1, $y1, $x2, $y2) = @_;
 
-  my $moves = $GAMES->[$GAME{idx}]->{GameMoves};
-
-  my $cm2 = int($GAME{curmove}->{mn}/2+0.5) . ($GAME{curmove}->{mn} % 2 == 1 ? "w" : "b");
-  if (defined($GAME{comments}->{$cm2})) {
-    my $j = 0;
-    for $c (@{$GAME{comments}->{$cm2}}) {
-      $GAME{win}->addstring($y1+$j, $x1, $c);
-      $j++;
-    }
+  $GAME{win}->addstring($y1-1, $x1, ":".$GAME{curmove}->{mn}." ".$GAME{curmove}->{move});
+  my $j = 0;
+  for (@{$GAME{curmove}->{comments}}) {
+    s/^\{ ?//; s/ ?\}$//g;
+    $GAME{win}->addstring($y1+$j++, $x1, $_);
   }
+  return $y1+$j;
 }
 
 sub game_redraw {
@@ -315,8 +340,9 @@ sub game_redraw {
   $GAME{win}->clear;
 
   game_draw_header 0, 0, $maxx, 5;
-  game_draw_moves_list 0, 5, $maxx, 15;
-  #game_draw_comments 0, 15, $maxx, 20;
+  my $y = game_draw_moves_list 0, 5, $maxx, 15;
+  $y = game_draw_variants 0, ($y+2), $maxx, ($y+8);
+  $y = game_draw_comments 0, ($y+2), $maxx, ($y+8);
 
   # print the position to the board
   if (($BOARD) && ($BOARD->opened)) {

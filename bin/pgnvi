@@ -34,17 +34,16 @@ our $FILENAME = $ARGV[0];
 
 $pgn = new Chess::PGN::Parse "$FILENAME"
   || die "Could not open file: $FILENAME";
-$GAMES = $pgn->smart_read_all({save_comments => 'yes', comments_struct => 'array'});
+$GAMES = $pgn->smart_read_all();
 
-# TODO (for v 0.1)
+# TODO (for v 0.2)
+# - comments and variants
 # - improvements in the tree view:
 #   - compress nodes with only one child
 # - list & tree view
 #   - searching
 #   - filtering
 # - scrolling of the move list
-# - variants
-# - wrapping comments
 # - editing comments with $EDITOR
 # TODO metadata editing mode
 # FIXME bugs:
@@ -160,13 +159,62 @@ sub board_close_if_open {
 
 # GAME VIEW
 
-sub game_precompute_positions {
-  my $moves = $GAMES->[$GAME{idx}]->{GameMoves};
-  $GAME{pos} = new Chess::Rep;
-  $GAME{positions} = [$GAME{pos}->get_fen];
-  for (my $i = 0; $i <= $#$moves; $i++) {
-    $GAME{pos}->go_move($moves->[$i]);
-    push @{$GAME{positions}}, $GAME{pos}->get_fen;
+sub game_new_node {
+  my ($move, $parent) = @_;
+  my $node = {
+    pos => undef,
+    move => $move,
+    mn => 0,
+    prev => undef,
+    next => undef,
+    nags => [],
+    variants => [],
+    comments => []
+  };
+  if (defined($parent)) {
+    $node->{prev} = $parent;
+    $node->{pos} = new Chess::Rep($parent->{pos}->get_fen);
+    $node->{pos}->go_move($move);
+    $node->{mn} = $parent->{mn}+1;
+  } else {
+    $node->{pos} = new Chess::Rep;
+    if (defined($move)) {
+      $node->{pos}->go_move($move);
+    }
+  }
+  return $node;
+}
+
+sub game_parse {
+  my ($text, $parent) = @_;
+
+  my $game = new Chess::PGN::Parse undef, $text;
+  $game->read_game;
+  $game->parse_game({save_comments => 'yes', comments_struct => 'array'});
+  my $moves = $game->moves;
+
+  my $root;
+  if (!defined($parent)) {
+    $root = game_new_node;
+  } else {
+    $root = game_new_node (shift @$moves), $parent;
+  }
+
+  my ($node, $prevnode) = ($root, undef);
+  for (@$moves) {
+    $prevnode = $node;
+    $node = game_new_node $_, $prevnode;
+    $prevnode->{next} = $node;
+  }
+  return $root;
+}
+
+sub game_listmoves {
+  $GAME{movelist} = [];
+  my $node = $GAME{movetree};
+  while (defined($node)) {
+    push @{$GAME{movelist}}, $node;
+    $node = $node->{next};
   }
 }
 
@@ -199,16 +247,14 @@ sub game_draw_header {
 sub game_draw_moves_list {
   my ($x1, $y1, $x2, $y2) = @_;
 
-  my $moves = $GAMES->[$GAME{idx}]->{GameMoves};
   my $win = $GAME{win};
   my ($cx, $cy) = ($x1, $y1);
 
-  my $last_move_idx = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
-
-  for (my $i = 0; $i <= $#$moves; $i++) {
-    my $mn = int($i/2+1).".";
-    if ($i % 2 == 0) {
-      if ($cx + length("$mn $moves->[$i] $moves->[$i+1]") > $x2) {
+  for (@{$GAME{movelist}}) {
+    next if ($_->{mn} <= 0);
+    my $mn = int(($_->{mn}+1)/2).".";
+    if ($_->{mn} % 2 == 1) {
+      if ($cx + length("$mn $_->{move} $_->{next}->{move}") > $x2) {
         $cx = $x1;
         $cy++;
         last if $cy > $y2;
@@ -216,12 +262,12 @@ sub game_draw_moves_list {
       $win->addstring($cy, $cx, "$mn");
       $cx += length($mn) + 1;
     } 
-    if (($i+1 == $GAME{move}) && !defined($GAME{append})) {
+    if (($_ == $GAME{curmove}) && !defined($GAME{append})) {
       $win->attron(A_REVERSE);
     }
-    $win->addstring($cy, $cx, $moves->[$i]);
-    $cx += length($moves->[$i]) + 1;
-    if (($i+1 == $GAME{move}) && !defined($GAME{append})) {
+    $win->addstring($cy, $cx, $_->{move});
+    $cx += length($_->{move}) + 1;
+    if (($_ == $GAME{curmove}) && !defined($GAME{append})) {
       $win->attroff(A_REVERSE);
     }
   }
@@ -229,7 +275,7 @@ sub game_draw_moves_list {
   # TODO going to the next line if the text exceeds the line width
   if (defined($GAME{append})) {
     my $appendstr = $GAME{append} ? $GAME{append} : " ";
-    my $nmoves = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
+    my $nmoves = $#{$GAME{movelist}};
     if ($nmoves % 2 == 0) {
       $appendstr = int($nmoves/2+1). ". " . $appendstr;
     }
@@ -239,6 +285,7 @@ sub game_draw_moves_list {
     $cx += length($appendstr)+1;
   }
   # append the result to the moves list
+  # TODO only if in main line!
   if (defined($GAMES->[$GAME{idx}]->{Result})) {
     my $result = $GAMES->[$GAME{idx}]->{Result};
     if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
@@ -251,11 +298,11 @@ sub game_draw_comments {
 
   my $moves = $GAMES->[$GAME{idx}]->{GameMoves};
 
-  my $cm2 = int($GAME{move}/2+0.5) . ($GAME{move} % 2 == 1 ? "w" : "b");
+  my $cm2 = int($GAME{curmove}->{mn}/2+0.5) . ($GAME{curmove}->{mn} % 2 == 1 ? "w" : "b");
   if (defined($GAME{comments}->{$cm2})) {
     my $j = 0;
     for $c (@{$GAME{comments}->{$cm2}}) {
-      $win->addstring($y1+$j, $x1, $c);
+      $GAME{win}->addstring($y1+$j, $x1, $c);
       $j++;
     }
   }
@@ -273,7 +320,7 @@ sub game_redraw {
 
   # print the position to the board
   if (($BOARD) && ($BOARD->opened)) {
-    print $BOARD $GAME{positions}->[$GAME{move}]."\n";
+    print $BOARD $GAME{curmove}->{pos}->get_fen."\n";
   }
 }
 
@@ -298,14 +345,14 @@ sub game_append_keypress {
     $GAME{append} .= "O-O-O";
     game_redraw;
   } elsif ($c eq ' ') {
+    # try adding the currently appended move
     try {
-      $GAME{pos}->set_from_fen($GAME{positions}->[$#{$GAME{positions}}]);
-      $GAME{pos}->go_move($GAME{append});
-      push @{$GAMES->[$GAME{idx}]->{GameMoves}}, $GAME{append};
-      push @{$GAME{positions}}, $GAME{pos}->get_fen;
-      push @{$GAME{changes}->[$#{$GAME{changes}}]->{added}}, $GAME{append};
+      my $lastnode = $GAME{movelist}->[$#{$GAME{movelist}}];
+      my $node = game_new_node($GAME{append}, $lastnode);
+      $lastnode->{next} = $node;
+      push @{$GAME{movelist}}, $node;
       $GAME{append} = "";
-      $GAME{move} = $#{$GAME{positions}};
+      $GAME{curmove} = $node;
     };
     game_redraw;
   }
@@ -321,44 +368,37 @@ sub game_keypress {
   } elsif ($key == KEY_RESIZE) {
     game_redraw;
   } elsif ($c eq 'g') {
-    $GAME{move} = 0;
+    $GAME{curmove} = $GAME{movelist}->[0];
     game_redraw;
   } elsif ($c eq 'G') {
-    $GAME{move} = $last_move_idx;
+    $GAME{curmove} = $GAME{movelist}->[$#{$GAME{movelist}}];
     game_redraw;
-  } elsif ($c eq 'j') {
-    if ($GAME{move} < $last_move_idx) { $GAME{move}++; }
+  } elsif (($c eq 'j') && (defined($GAME{curmove}->{next}))) {
+    $GAME{curmove} = $GAME{curmove}->{next};
     game_redraw;
-  } elsif ($c eq 'k') {
-    if ($GAME{move} > 0) { $GAME{move}--; }
+  } elsif (($c eq 'k') && (defined($GAME{curmove}->{prev}))) {
+    $GAME{curmove} = $GAME{curmove}->{prev};
     game_redraw;
   } elsif ($c eq 'a') {
     # enter the append mode
     $GAME{append} = "";
-    push @{$GAME{changes}}, { added => [], deleted => [] };
+    push @{$GAME{changes}}, { at => $GAME{curmove}, deleted => undef };
     game_redraw;
   } elsif ($c eq 'A') {
     # delete everything behind the cursor and enter the append mode
-    my @del = splice @{$GAMES->[$GAME{idx}]->{GameMoves}}, $GAME{move};
-    splice @{$GAME{positions}}, ($GAME{move}+1);
-    push @{$GAME{changes}}, { added => [], deleted => \@del };
+    $GAME{curmove}->{next} = undef;
     $GAME{append} = "";
+    push @{$GAME{changes}},
+         { at => $GAME{curmove}, deleted => $GAME{curmove}->{next} };
+    game_listmoves;
     game_redraw;
   } elsif ($c eq 'u') {
     # undo the last append
     if (length @{$GAME{changes}} > 0) {
       my $change = pop @{$GAME{changes}};
-      my $len = $#{$change->{added}}+1;
-      my $offset = ($#{$GAMES->[$GAME{idx}]->{GameMoves}}+1) - $len;
-      splice @{$GAMES->[$GAME{idx}]->{GameMoves}}, $offset, $len,
-        @{$change->{deleted}};
-      splice @{$GAME{positions}}, ($offset+1);
-      $GAME{pos}->set_from_fen($GAME{positions}->[$offset]);
-      for (my $i = $offset; $i <= $#{$GAMES->[$GAME{idx}]->{GameMoves}}; $i++) {
-        $GAME{pos}->go_move($GAMES->[$GAME{idx}]->{GameMoves}->[$i]);
-        push @{$GAME{positions}}, $GAME{pos}->get_fen;
-      }
-      $GAME{move} = $offset;
+      $change->{at}->{next} = $change->{deleted};
+      $GAME{curmove} = $change->{at};
+      game_listmoves;
       game_redraw;
     }
   } elsif ($c eq 'b') {
@@ -369,7 +409,7 @@ sub game_keypress {
       game_redraw;
     }
   } elsif ($c eq 'y') {
-    yank $GAME{positions}->[$GAME{move}];
+    yank $GAME{curmove}->{pos}->get_fen;
   } elsif ($c eq 's') {
     save $FILENAME;
   }
@@ -378,13 +418,15 @@ sub game_keypress {
 sub game_show {
   my $win = shift;
   my $idx = shift;
-  my $move = shift;
+  my $move_idx = shift;
 
-  if (!defined($move)) { $move = 0; }
+  if (!defined($move_idx)) { $move = 0; }
   %GAME = (
-    win => $win, idx => $idx, move => $move, board => 0,
-    append => undef, changes => []);
-  game_precompute_positions;
+    win => $win, idx => $idx, move => undef, board => 0,
+    append => undef, changes => [], comments => undef);
+  $GAME{movetree} = game_parse $GAMES->[$idx]->{Game}, undef, 0;
+  game_listmoves;
+  $GAME{curmove} = $GAME{movelist}->[$move_idx];
   game_redraw;
 
   my ($c, $key);

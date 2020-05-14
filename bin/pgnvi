@@ -91,7 +91,7 @@ sub print_game {
     }
   }
   print $fh "\n";
-  print $fh (join " ", number_moves(@{$game->{GameMoves}}))."\n\n";
+  print $fh $game->{Game}."\n\n";
 }
 
 sub save {
@@ -551,7 +551,8 @@ sub game_keypress {
     yank $GAME{curmove}->{pos}->get_fen;
   } elsif ($c eq 's') {
     game_save;
-    save $FILENAME;
+    my $file = prompt_show $GAME{win}, "save to file:", $FILENAME;
+    save $file;
   } elsif ($c eq 'c') {
     if (!@{$GAME{curmove}->{comments}}) {
       push @{$GAME{curmove}->{comments}}, "";

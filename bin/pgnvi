@@ -8,6 +8,7 @@ use Chess::Rep;
 use Chess::PGN::Parse;
 
 our %GAME;
+our %PROMPT;
 our $BOARD;
 
 our %LIST = (
@@ -41,6 +42,8 @@ $GAMES = $pgn->smart_read_all();
 #     'v' creates a new variant and goes to append mode
 #     'V' deletes the current variant (if not main line)
 #   - comments are edited via a text editor (one comment per line)
+#   - 'E' edits the whole game with $EDITOR (useful also for changing
+#     the metadata)
 # - improvements in the tree view:
 #   - compress nodes with only one child
 # - list & tree view
@@ -158,6 +161,46 @@ sub board_close_if_open {
   if (($BOARD) && ($BOARD->opened)) {
     board_close;
   }
+}
+
+# PROMPT
+
+sub prompt_redraw {
+  my ($maxy, $maxx);
+  $PROMPT{win}->getmaxyx($maxy, $maxx);
+  $PROMPT{win}->move($maxy-1, 0);
+  $PROMPT{win}->clrtoeol;
+
+  my $max_val_len = $maxx - length($PROMPT{prompt})-1;
+  $text = $PROMPT{prompt}." ".(substr $PROMPT{value}, -$max_val_len);
+  $PROMPT{win}->addstring($maxy-1, 0, $text);
+}
+
+sub prompt_keypress {
+  my ($c, $key) = @_;
+  if ($c =~ /[a-z]/) {
+    $PROMPT{value} .= $c;
+    prompt_redraw;
+  } elsif (($key == KEY_BACKSPACE) && ($PROMPT{value})) {
+    $PROMPT{value} = substr $PROMPT{value}, 0, -1;
+    prompt_redraw;
+  }
+}
+
+sub prompt_show {
+  my ($win, $prompt, $default) = @_;
+
+  %PROMPT = ( win => $win, prompt => $prompt, value => $default );
+  prompt_redraw;
+
+  curs_set(1);
+  my ($c, $key);
+  while (!($c eq "\n")) {
+    ($c, $key) = $win->getchar;
+    prompt_keypress $c, $key;
+  }
+  curs_set(0);
+  return $PROMPT{value};
 }
 
 # GAME VIEW
@@ -457,6 +500,14 @@ sub game_keypress {
     yank $GAME{curmove}->{pos}->get_fen;
   } elsif ($c eq 's') {
     save $FILENAME;
+  } elsif ($c eq 'c') {
+    if (!@{$GAME{curmove}->{comments}}) {
+      push @{$GAME{curmove}->{comments}}, "";
+    }
+    $GAME{curmove}->{comments}->[0] =
+      prompt_show $GAME{win}, "quick comment:",
+                  $GAME{curmove}->{comments}->[0];
+    game_redraw;
   } elsif ($c eq '0') {
     my $node = pop @{$GAME{variant}};
     if (defined($node)) {

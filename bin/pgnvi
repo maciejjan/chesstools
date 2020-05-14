@@ -300,7 +300,7 @@ sub game_draw_moves_list {
   }
   # append the result to the moves list
   # TODO only if in main line!
-  if (defined($GAMES->[$GAME{idx}]->{Result})) {
+  if ((defined($GAMES->[$GAME{idx}]->{Result})) && (!@{$GAME{variant}})) {
     my $result = $GAMES->[$GAME{idx}]->{Result};
     if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
     $win->addstring($cy, $cx, $result);
@@ -352,9 +352,15 @@ sub game_redraw {
   $y = game_draw_comments 0, ($y+2), $maxx, ($y+8);
 
   # add status bar
-  $GAME{win}->attron(A_REVERSE);
-  $GAME{win}->addstring($maxy-1, 0, $GAME{vartext});
-  $GAME{win}->attroff(A_REVERSE);
+  my $status = join "; ",
+    (map { int($_->{mn}/2+0.5) . "." . ($_->{mn} % 2 == 0 ? ".." : "")
+           . " " . $_->{move}
+         } @{$GAME{variant}});
+  if ($status) {
+    $GAME{win}->attron(A_REVERSE);
+    $GAME{win}->addstring($maxy-1, 0, $status);
+    $GAME{win}->attroff(A_REVERSE);
+  }
 
   # print the position to the board
   if (($BOARD) && ($BOARD->opened)) {
@@ -451,22 +457,28 @@ sub game_keypress {
     yank $GAME{curmove}->{pos}->get_fen;
   } elsif ($c eq 's') {
     save $FILENAME;
-  } elsif ($c =~ /[0-9]/) {
+  } elsif ($c eq '0') {
+    my $node = pop @{$GAME{variant}};
+    if (defined($node)) {
+      $node->{prev}->{next} = $node->{prev}->{variants}->[0];
+      $GAME{curmove} = $node->{prev}->{variants}->[0];
+      game_redraw;
+    }
+  } elsif ($c =~ /[1-9]/) {
     my $i = int($c);
     my $prev = $GAME{curmove}->{prev};
     # TODO also check whether we're on the main line here
     if ($i <= $#{$prev->{variants}}) {
+      my $j = $#{$GAME{variant}};
+      while (($j > -1) && ($GAME{variant}->[$j]->{mn} >= $GAME{curmove}->{mn})) {
+        $GAME{variant}->[$j]->{prev}->{next} =
+          $GAME{variant}->[$j]->{prev}->{variants}->[0];
+        $j--;
+      }
+      splice @{$GAME{variant}}, ($j+1);
       $prev->{next} = $prev->{variants}->[$i];
       $GAME{curmove} = $prev->{next};
-      # refresh vartext
-      $GAME{vartext} = "";
-      for (my $n = $GAME{movetree}; defined($n->{next}); $n = $n->{next}) {
-        if ($n->{next} != $n->{variants}->[0]) {
-          $GAME{vartext} .= int($n->{next}->{mn}/2+0.5) . "."
-                            . ($n->{next}->{mn} % 2 == 0 ? ".." : "")
-                            . " " . $n->{next}->{move}."; ";
-        }
-      }
+      push @{$GAME{variant}}, $GAME{curmove};
       game_redraw;
     }
   }
@@ -480,7 +492,7 @@ sub game_show {
   if (!defined($move_idx)) { $move = 0; }
   %GAME = (
     win => $win, idx => $idx, curmove => undef, board => 0,
-    append => undef, changes => [], comments => undef, vartext => "" );
+    append => undef, changes => [], comments => undef, variant => [] );
   $GAME{movetree} = game_parse($GAMES->[$idx]->{Game}, undef);
   $GAME{curmove} = $GAME{movetree};
   for (my $i = 0; $i < $move_idx; $i++) {

@@ -183,7 +183,7 @@ sub prompt_redraw {
 
 sub prompt_keypress {
   my ($c, $key) = @_;
-  if ($c =~ /[a-z]/) {
+  if ($c =~ /[\S ]/) {
     $PROMPT{value} .= $c;
     prompt_redraw;
   } elsif (($key == KEY_BACKSPACE) && ($PROMPT{value})) {

@@ -64,6 +64,11 @@ sub yank {
   }
 }
 
+sub move_number {
+  my $mn = shift;
+  return int($mn/2+0.5) . "." . ($mn % 2 == 0 ? ".." : "");
+}
+
 sub number_moves {
   my $mn = 0;
   my @result = ();
@@ -266,10 +271,59 @@ sub game_parse {
       }
     }
     if (defined($comments->{$hmn}->{brace})) {
-      $node->{comments} = $comments->{$hmn}->{brace};
+      for (@{$comments->{$hmn}->{brace}}) {
+        s/^\{\s*//; s/\s*\}$//g;
+        push @{$node->{comments}}, $_;
+      }
     }
   }
   return $root;
+}
+
+sub game_tree_to_movelist {
+  my $node = $GAME{movetree};
+  my $result = [];
+  while (@{$node->{variants}}) {
+    $node = $node->{variants}->[0];
+    push @{$result}, $node->{move};
+  }
+  return $result;
+}
+
+sub game_tree_to_str {
+  my $node = shift;
+  if (!defined($node->{prev})) {
+    $node = $node->{variants}->[0];
+  }
+
+  my @result = ();
+  my $clen = 0;
+  while (defined($node)) {
+    # TODO move number
+    if (($node->{mn} % 2 == 1) || ($#{$node->{prev}->{comments}} > 0)
+        || ($#{$node->{prev}->{variants}} > 0)) {
+      push @result, move_number($node->{mn});
+    }
+    push @result, $node->{move};
+    for (@{$node->{comments}}) {
+      if ($_) { push @result, "{$_}"; }
+    }
+    if ($node == $node->{prev}->{variants}->[0]) {
+      for (my $i = 1; $i <= $#{$node->{prev}->{variants}}; $i++) {
+        push @result, "(" . game_tree_to_str($node->{prev}->{variants}->[$i]) . ")";
+      }
+    }
+    last if ($#{$node->{variants}} < 0);
+    $node = $node->{variants}->[0];
+  }
+  return join(" ", @result);
+}
+
+sub game_save {
+  my $game = $GAMES->[$GAME{idx}];
+  #print STDERR game_tree_to_str($GAME{movetree});   # DEBUG
+  $game->{GameMoves} = game_tree_to_movelist;
+  $game->{Game} = game_tree_to_str $GAME{movetree};
 }
 
 sub game_draw_header {
@@ -377,7 +431,6 @@ sub game_draw_comments {
 
   my $j = 0;
   for (@{$GAME{curmove}->{comments}}) {
-    s/^\{ ?//; s/ ?\}$//g;
     $GAME{win}->addstring($y1+$j++, $x1, $_);
   }
   return $y1+$j;
@@ -396,9 +449,7 @@ sub game_redraw {
 
   # add status bar
   my $status = join "; ",
-    (map { int($_->{mn}/2+0.5) . "." . ($_->{mn} % 2 == 0 ? ".." : "")
-           . " " . $_->{move}
-         } @{$GAME{variant}});
+    (map { move_number($_->{mn}) . " " . $_->{move} } @{$GAME{variant}});
   if ($status) {
     $GAME{win}->attron(A_REVERSE);
     $GAME{win}->addstring($maxy-1, 0, $status);
@@ -499,6 +550,7 @@ sub game_keypress {
   } elsif ($c eq 'y') {
     yank $GAME{curmove}->{pos}->get_fen;
   } elsif ($c eq 's') {
+    game_save;
     save $FILENAME;
   } elsif ($c eq 'c') {
     if (!@{$GAME{curmove}->{comments}}) {
@@ -556,6 +608,7 @@ sub game_show {
     ($c, $key) = $win->getchar();
     game_keypress $c, $key;
   }
+  game_save;
 }
 
 # TREE VIEW

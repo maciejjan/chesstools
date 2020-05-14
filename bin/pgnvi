@@ -35,7 +35,7 @@ our $FILENAME = $ARGV[0];
 
 $pgn = new Chess::PGN::Parse "$FILENAME"
   || die "Could not open file: $FILENAME";
-$GAMES = $pgn->smart_read_all();
+$GAMES = $pgn->read_all();
 
 # TODO (for v 0.2)
 # - comments and variants

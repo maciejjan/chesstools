@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 use Curses;
+use File::Temp qw/tempfile/;
 use Try::Tiny;
 use utf8;
 
@@ -38,12 +39,12 @@ $pgn = new Chess::PGN::Parse "$FILENAME"
 $GAMES = $pgn->read_all();
 
 # TODO (for v 0.2)
-# - comments and variants
-#     'v' creates a new variant and goes to append mode
-#     'V' deletes the current variant (if not main line)
-#   - comments are edited via a text editor (one comment per line)
 #   - 'E' edits the whole game with $EDITOR (useful also for changing
 #     the metadata)
+# - comments and variants
+#     'v' creates a new variant and goes to append mode
+#     'V' deletes the current variant (if not main line) and returns to the
+#         main line
 # - improvements in the tree view:
 #   - compress nodes with only one child
 # - list & tree view
@@ -561,6 +562,36 @@ sub game_keypress {
       prompt_show $GAME{win}, "quick comment:",
                   $GAME{curmove}->{comments}->[0];
     game_redraw;
+  } elsif ($c eq 'C') {
+    if (defined($ENV{EDITOR})) {
+      my ($fh, $filename) = tempfile(UNLINK => 1);
+      for (@{$GAME{curmove}->{comments}}) {
+        print $fh $_."\n\n";
+      }
+      close $fh;
+      system $ENV{EDITOR}, $filename;
+      open $fh, "<", $filename;
+      $GAME{curmove}->{comments} = [""];
+      for (<$fh>) {
+        s/\s*$//;
+        if (!$_) {
+          push @{$GAME{curmove}->{comments}}, "";
+        } else {
+          # add a space if it's not the first line of the comment
+          if ($GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}]) {
+            $_ .= ' ';
+          }
+          $GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}] .= $_;
+        }
+      }
+      # remove the last element if it's empty
+      if (!$GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}]) {
+        splice @{$GAME{curmove}->{comments}}, -1;
+      }
+      close $fh;
+      game_redraw;
+      curs_set(0);
+    }
   } elsif ($c eq '0') {
     my $node = pop @{$GAME{variant}};
     if (defined($node)) {

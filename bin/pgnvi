@@ -621,7 +621,7 @@ sub game_keypress {
       my $game = new Chess::PGN::Parse undef, $gametext;
       $game->read_game;
       $GAMES->[$GAME{idx}] = $game->tags;
-      $GAME{movetree} = game_parse($GAMES->[$idx]->{Game}, undef);
+      $GAME{movetree} = game_parse($GAMES->[$GAME{idx}]->{Game}, undef);
       $GAME{curmove} = $GAME{movetree};
       endwin;
       setup_curses $GAME{win};

@@ -39,8 +39,11 @@ $pgn = new Chess::PGN::Parse "$FILENAME"
 $GAMES = $pgn->read_all();
 
 # TODO (for v 0.2)
-#   - 'E' edits the whole game with $EDITOR (useful also for changing
-#     the metadata)
+# - correct the coding style
+#   - last element of an array: $arr_ref->[-1];
+#   - iterating over arrays: foreach instead of counters
+#   - subroutine parameters: use @_ instead of shift
+#   - refactor larger subroutines (especially *_keypress)
 # - comments and variants
 #     'v' creates a new variant and goes to append mode
 #     'V' deletes the current variant (if not main line) and returns to the

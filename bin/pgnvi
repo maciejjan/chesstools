@@ -155,6 +155,18 @@ sub format_list {
   return $result;
 }
 
+sub setup_curses {
+  my $win = shift;
+  initscr;
+  raw;
+  keypad($win, 1);
+  noecho();
+  curs_set(0);
+
+  start_color;
+  use_default_colors;
+}
+
 # BOARD
 
 sub board_open {
@@ -592,8 +604,29 @@ sub game_keypress {
         splice @{$GAME{curmove}->{comments}}, -1;
       }
       close $fh;
+      endwin;
+      setup_curses $GAME{win};
       game_redraw;
-      curs_set(0);
+    }
+  } elsif ($c eq 'E') {
+    if (defined($ENV{EDITOR})) {
+      game_save;
+      my ($fh, $filename) = tempfile(UNLINK => 1);
+      print_game $fh, $GAMES->[$GAME{idx}];
+      close $fh;
+      system $ENV{EDITOR}, $filename;
+      open $fh, "<", $filename;
+      my $gametext = "";
+      while (<$fh>) { $gametext .= $_; }
+      # read the result and substitite the current game for it
+      my $game = new Chess::PGN::Parse undef, $gametext;
+      $game->read_game;
+      $GAMES->[$GAME{idx}] = $game->tags;
+      $GAME{movetree} = game_parse($GAMES->[$idx]->{Game}, undef);
+      $GAME{curmove} = $GAME{movetree};
+      endwin;
+      setup_curses $GAME{win};
+      game_redraw;
     }
   } elsif ($c eq '0') {
     my $node = pop @{$GAME{variant}};
@@ -931,19 +964,12 @@ sub list_show {
   }
 }
 
+
 # MAIN BODY
 
 my $win = new Curses;
 
-initscr;
-raw;
-keypad($win, 1);
-noecho();
-curs_set(0);
-
-start_color;
-use_default_colors;
-
+setup_curses $win;
 list_show $win;
 
 curs_set(1);

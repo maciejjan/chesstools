@@ -45,7 +45,6 @@ $GAMES = $pgn->read_all();
 #   - subroutine parameters: use @_ instead of shift
 #   - refactor larger subroutines (especially *_keypress)
 # - comments and variants
-#     'v' creates a new variant and goes to append mode
 #     'V' deletes the current variant (if not main line) and returns to the
 #         main line
 # - improvements in the tree view:
@@ -626,6 +625,23 @@ sub game_keypress {
       $GAME{curmove} = $GAME{movetree};
       endwin;
       setup_curses $GAME{win};
+      game_redraw;
+    }
+  } elsif ($c eq 'v') {
+    my $move = prompt_show $GAME{win}, "enter move:", "";
+    try {
+      my $node = game_new_node $move, $GAME{curmove}->{prev};
+      push @{$GAME{curmove}->{prev}->{variants}}, $node;
+      $GAME{curmove}->{prev}->{next} = $node;
+      $GAME{curmove} = $node;
+      # FIXME duplication! -- unify with line 661
+      my $j = $#{$GAME{variant}};
+      while (($j > -1) && ($GAME{variant}->[$j]->{mn} >= $GAME{curmove}->{mn})) {
+        $GAME{variant}->[$j]->{prev}->{next} =
+          $GAME{variant}->[$j]->{prev}->{variants}->[0];
+        $j--;
+      }
+      push @{$GAME{variant}}, $GAME{curmove};
       game_redraw;
     }
   } elsif ($c eq '0') {

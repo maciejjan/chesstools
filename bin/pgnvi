@@ -457,25 +457,27 @@ sub game_draw_comments {
   return $y1+$j;
 }
 
+sub game_draw_status {
+  my $y = shift;
+  my $status = join "; ",
+    (map { move_number($_->{mn}) . " " . $_->{move} } @{$GAME{variant}});
+  if ($status) {
+    $GAME{win}->attron(A_REVERSE);
+    $GAME{win}->addstring($y, 0, $status);
+    $GAME{win}->attroff(A_REVERSE);
+  }
+}
+
 sub game_redraw {
   my ($maxy, $maxx);
   $GAME{win}->getmaxyx($maxy, $maxx);
-
   $GAME{win}->clear;
 
   game_draw_header 0, 0, $maxx, 5;
   my $y = game_draw_moves_list 0, 5, $maxx, 15;
   $y = game_draw_variants 0, ($y+2), $maxx, ($y+8);
   $y = game_draw_comments 0, ($y+2), $maxx, ($y+8);
-
-  # add status bar
-  my $status = join "; ",
-    (map { move_number($_->{mn}) . " " . $_->{move} } @{$GAME{variant}});
-  if ($status) {
-    $GAME{win}->attron(A_REVERSE);
-    $GAME{win}->addstring($maxy-1, 0, $status);
-    $GAME{win}->attroff(A_REVERSE);
-  }
+  game_draw_status $maxy-1;
 
   # print the position to the board
   if (($BOARD) && ($BOARD->opened)) {

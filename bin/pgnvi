@@ -325,7 +325,7 @@ sub game_tree_to_str {
   return join(" ", @result);
 }
 
-sub game_save {
+sub game_update {
   my $game = $GAMES->[$GAME{idx}];
   #print STDERR game_tree_to_str($GAME{movetree});   # DEBUG
   $game->{GameMoves} = game_tree_to_movelist;
@@ -382,7 +382,6 @@ sub game_draw_moves_list {
   my $n = $GAME{movetree};
   do {
     $n = $n->{next};
-    #if ($n->{mn} <= 0) { $n = $n->{next}; next; }
     my $mn = int(($n->{mn}+1)/2).".";
     if ($n->{mn} % 2 == 1) {
        my $nextlength = length("$mn $n->{move} "
@@ -549,181 +548,241 @@ sub game_appendmode_keypress {
   }
 }
 
+# go to the first move
+sub game_goto_first {
+  $GAME{curmove} = $GAME{movetree};
+  game_redraw;
+}
+
+# go to the last move
+sub game_goto_last {
+  while (defined($GAME{curmove}->{next})) {
+    $GAME{curmove} = $GAME{curmove}->{next};
+  }
+  game_redraw;
+}
+
+# go to the next move
+sub game_goto_next {
+  if (defined($GAME{curmove}->{next})) {
+    $GAME{curmove} = $GAME{curmove}->{next};
+    game_redraw;
+  }
+}
+
+# go to the previous move
+sub game_goto_prev {
+  if (defined($GAME{curmove}->{prev})) {
+    $GAME{curmove} = $GAME{curmove}->{prev};
+    game_redraw;
+  }
+}
+
+# go to the end of the move list and enter the append mode
+sub game_append {
+  while (defined($GAME{curmove}->{next})) {
+    $GAME{curmove} = $GAME{curmove}->{next};
+  }
+  $GAME{append} = "";
+  push @{$GAME{changes}},
+       { at => $GAME{curmove}, var => undef, next => undef,
+         addnode => undef, delnode => undef };
+  game_redraw;
+}
+
+# delete everything after the current move and enter the append mode
+sub game_delete_and_append {
+  my $idx = 0;
+  # FIXME avoid an infinite loop, check whether
+  # idx <= $#{GAME{curmove}->{variants}}
+  while ($GAME{curmove}->{next} != $GAME{curmove}->{variants}->[$idx]) {
+    $idx++;
+    #last if (++$idx > $#{$GAME{curmove}->{variants}});
+  }
+  push @{$GAME{changes}},
+       { at => $GAME{curmove}, var => $idx, next => $GAME{curmove}->{next},
+         addnode => undef, delnode => $GAME{curmove}->{next} };
+  $GAME{curmove}->{next} = undef;
+  splice @{$GAME{curmove}->{variants}}, $idx, 1;
+  $GAME{append} = "";
+  game_redraw;
+}
+
+# insert a new variant next to the current move
+sub game_insert_variant {
+  $GAME{curmove} = $GAME{curmove}->{prev};
+  $GAME{append} = "";
+  push @{$GAME{changes}},
+       { at => $GAME{curmove}, var => undef, next => $GAME{curmove}->{next},
+         addnode => undef, delnode => undef };
+  $GAME{curmove}->{next} = undef;
+  game_reset_variant;
+  game_redraw;
+}
+
+# undo the last append/delete operation
+sub game_undo {
+  if (@{$GAME{changes}}) {
+    my $change = pop @{$GAME{changes}};
+    $GAME{curmove} = $change->{at};
+
+    # delete the variant that was added by the change and restore the
+    # previously deleted one
+    if (!defined($change->{var})) {
+      pop @{$GAME{curmove}->{variants}};
+      if (defined($change->{delmove})) {
+        push @{$GAME{curmove}->{variants}}, $change->{delnode};
+      }
+    } else {
+      my @add = ();
+      if (defined($change->{delnode})) {
+        push @add, $change->{delnode};
+      }
+      splice @{$GAME{curmove}->{variants}}, $change->{var}, 1, @add;
+    }
+
+    # revert the view
+    $GAME{curmove}->{next} = $change->{next};
+    game_reset_variant;
+    game_redraw;
+  }
+}
+
+# toggle showing the board
+sub game_toggle_board {
+  if (($BOARD) && ($BOARD->opened)) {
+    board_close;
+  } else {
+    board_open;
+    game_redraw;
+  }
+}
+
+# pipe the current position to $YANKCMD
+sub game_yank {
+  yank $GAME{curmove}->{pos}->get_fen;
+}
+
+# save the game to a file (prompt for filename before saving)
+sub game_save {
+  game_update;
+  my $file = prompt_show $GAME{win}, "save to file:", $FILENAME;
+  save $file;
+}
+
+# edit the first comment of the current move using a prompt
+sub game_quick_comment {
+  if (!@{$GAME{curmove}->{comments}}) {
+    push @{$GAME{curmove}->{comments}}, "";
+  }
+  $GAME{curmove}->{comments}->[0] =
+    prompt_show $GAME{win}, "quick comment:",
+                $GAME{curmove}->{comments}->[0];
+  game_redraw;
+}
+
+# edit all comments of the current move with $EDITOR
+sub game_ext_edit_comment {
+  if (defined($ENV{EDITOR})) {
+    my ($fh, $filename) = tempfile(UNLINK => 1);
+    for (@{$GAME{curmove}->{comments}}) {
+      print $fh $_."\n\n";
+    }
+    close $fh;
+    system $ENV{EDITOR}, $filename;
+    open $fh, "<", $filename;
+    $GAME{curmove}->{comments} = [""];
+    for (<$fh>) {
+      s/\s*$//;
+      if (!$_) {
+        push @{$GAME{curmove}->{comments}}, "";
+      } else {
+        # add a space if it's not the first line of the comment
+        if ($GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}]) {
+          $_ .= ' ';
+        }
+        $GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}] .= $_;
+      }
+    }
+    # remove the last element if it's empty
+    if (!$GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}]) {
+      splice @{$GAME{curmove}->{comments}}, -1;
+    }
+    close $fh;
+    endwin;
+    setup_curses $GAME{win};
+    game_redraw;
+  }
+}
+
+# edit the PGN of the game with $EDITOR
+sub game_ext_edit_pgn {
+  if (defined($ENV{EDITOR})) {
+    game_update;
+    my ($fh, $filename) = tempfile(UNLINK => 1);
+    print_game $fh, $GAMES->[$GAME{idx}];
+    close $fh;
+    system $ENV{EDITOR}, $filename;
+    open $fh, "<", $filename;
+    my $gametext = "";
+    while (<$fh>) { $gametext .= $_; }
+    # read the result and substitite the current game for it
+    my $game = new Chess::PGN::Parse undef, $gametext;
+    $game->read_game;
+    $GAMES->[$GAME{idx}] = $game->tags;
+    $GAME{movetree} = game_parse($GAMES->[$GAME{idx}]->{Game}, undef);
+    $GAME{curmove} = $GAME{movetree};
+    endwin;
+    setup_curses $GAME{win};
+    game_redraw;
+  }
+}
+
+# return to the main line in the last variant branching
+sub game_variant_up {
+  my $node = pop @{$GAME{variant}};
+  if (defined($node)) {
+    $node->{prev}->{next} = $node->{prev}->{variants}->[0];
+    $GAME{curmove} = $node->{prev}->{variants}->[0];
+    game_redraw;
+  }
+}
+
+# choose a variant (side line) at the current move
+sub game_goto_variant {
+  my $i = shift;
+  my $prev = $GAME{curmove}->{prev};
+  # TODO also check whether we're on the main line here
+  if ($i <= $#{$prev->{variants}}) {
+    game_reset_variant $prev;
+    $prev->{next} = $prev->{variants}->[$i];
+    $GAME{curmove} = $prev->{next};
+    push @{$GAME{variant}}, $GAME{curmove};
+    game_redraw;
+  }
+}
+
 sub game_keypress {
   my ($c, $key) = @_;
 
-  my $last_move_idx = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
-
-  if (defined $GAME{append}) {
-    game_appendmode_keypress $c, $key;
-  } elsif ($key == KEY_RESIZE) {
-    game_redraw;
-  } elsif ($c eq 'g') {
-    $GAME{curmove} = $GAME{movetree};
-    game_redraw;
-  } elsif ($c eq 'G') {
-    while (defined($GAME{curmove}->{next})) {
-      $GAME{curmove} = $GAME{curmove}->{next};
-    }
-    game_redraw;
-  } elsif (($c eq 'j') && (defined($GAME{curmove}->{next}))) {
-    $GAME{curmove} = $GAME{curmove}->{next};
-    game_redraw;
-  } elsif (($c eq 'k') && (defined($GAME{curmove}->{prev}))) {
-    $GAME{curmove} = $GAME{curmove}->{prev};
-    game_redraw;
-  } elsif ($c eq 'a') {
-    # enter the append mode
-    while (defined($GAME{curmove}->{next})) {
-      $GAME{curmove} = $GAME{curmove}->{next};
-    }
-    $GAME{append} = "";
-    push @{$GAME{changes}},
-         { at => $GAME{curmove}, var => undef, next => undef,
-           addnode => undef, delnode => undef };
-    game_redraw;
-  } elsif ($c eq 'A') {
-    # delete everything behind the cursor and enter the append mode
-    my $idx = 0;
-    # FIXME avoid an infinite loop, check whether
-    # idx <= $#{GAME{curmove}->{variants}}
-    while ($GAME{curmove}->{next} != $GAME{curmove}->{variants}->[$idx]) {
-      $idx++;
-      #last if (++$idx > $#{$GAME{curmove}->{variants}});
-    }
-    push @{$GAME{changes}},
-         { at => $GAME{curmove}, var => $idx, next => $GAME{curmove}->{next},
-           addnode => undef, delnode => $GAME{curmove}->{next} };
-    $GAME{curmove}->{next} = undef;
-    splice @{$GAME{curmove}->{variants}}, $idx, 1;
-    $GAME{append} = "";
-    game_redraw;
-  } elsif ($c eq 'i') {
-    $GAME{curmove} = $GAME{curmove}->{prev};
-    $GAME{append} = "";
-    push @{$GAME{changes}},
-         { at => $GAME{curmove}, var => undef, next => $GAME{curmove}->{next},
-           addnode => undef, delnode => undef };
-    $GAME{curmove}->{next} = undef;
-    game_reset_variant;
-    game_redraw;
-  } elsif ($c eq 'u') {
-    # undo the last append
-    if (@{$GAME{changes}}) {
-      my $change = pop @{$GAME{changes}};
-      $GAME{curmove} = $change->{at};
-
-      # delete the variant that was added by the change and restore the
-      # previously deleted one
-      if (!defined($change->{var})) {
-        pop @{$GAME{curmove}->{variants}};
-        if (defined($change->{delmove})) {
-          push @{$GAME{curmove}->{variants}}, $change->{delnode};
-        }
-      } else {
-        my @add = ();
-        if (defined($change->{delnode})) {
-          push @add, $change->{delnode};
-        }
-        splice @{$GAME{curmove}->{variants}}, $change->{var}, 1, @add;
-      }
-
-      # revert the view
-      $GAME{curmove}->{next} = $change->{next};
-      game_reset_variant;
-      game_redraw;
-    }
-  } elsif ($c eq 'b') {
-    if (($BOARD) && ($BOARD->opened)) {
-      board_close;
-    } else {
-      board_open;
-      game_redraw;
-    }
-  } elsif ($c eq 'y') {
-    yank $GAME{curmove}->{pos}->get_fen;
-  } elsif ($c eq 's') {
-    game_save;
-    my $file = prompt_show $GAME{win}, "save to file:", $FILENAME;
-    save $file;
-  } elsif ($c eq 'c') {
-    if (!@{$GAME{curmove}->{comments}}) {
-      push @{$GAME{curmove}->{comments}}, "";
-    }
-    $GAME{curmove}->{comments}->[0] =
-      prompt_show $GAME{win}, "quick comment:",
-                  $GAME{curmove}->{comments}->[0];
-    game_redraw;
-  } elsif ($c eq 'C') {
-    if (defined($ENV{EDITOR})) {
-      my ($fh, $filename) = tempfile(UNLINK => 1);
-      for (@{$GAME{curmove}->{comments}}) {
-        print $fh $_."\n\n";
-      }
-      close $fh;
-      system $ENV{EDITOR}, $filename;
-      open $fh, "<", $filename;
-      $GAME{curmove}->{comments} = [""];
-      for (<$fh>) {
-        s/\s*$//;
-        if (!$_) {
-          push @{$GAME{curmove}->{comments}}, "";
-        } else {
-          # add a space if it's not the first line of the comment
-          if ($GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}]) {
-            $_ .= ' ';
-          }
-          $GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}] .= $_;
-        }
-      }
-      # remove the last element if it's empty
-      if (!$GAME{curmove}->{comments}->[$#{$GAME{curmove}->{comments}}]) {
-        splice @{$GAME{curmove}->{comments}}, -1;
-      }
-      close $fh;
-      endwin;
-      setup_curses $GAME{win};
-      game_redraw;
-    }
-  } elsif ($c eq 'E') {
-    if (defined($ENV{EDITOR})) {
-      game_save;
-      my ($fh, $filename) = tempfile(UNLINK => 1);
-      print_game $fh, $GAMES->[$GAME{idx}];
-      close $fh;
-      system $ENV{EDITOR}, $filename;
-      open $fh, "<", $filename;
-      my $gametext = "";
-      while (<$fh>) { $gametext .= $_; }
-      # read the result and substitite the current game for it
-      my $game = new Chess::PGN::Parse undef, $gametext;
-      $game->read_game;
-      $GAMES->[$GAME{idx}] = $game->tags;
-      $GAME{movetree} = game_parse($GAMES->[$GAME{idx}]->{Game}, undef);
-      $GAME{curmove} = $GAME{movetree};
-      endwin;
-      setup_curses $GAME{win};
-      game_redraw;
-    }
-  } elsif ($c eq '0') {
-    my $node = pop @{$GAME{variant}};
-    if (defined($node)) {
-      $node->{prev}->{next} = $node->{prev}->{variants}->[0];
-      $GAME{curmove} = $node->{prev}->{variants}->[0];
-      game_redraw;
-    }
-  } elsif ($c =~ /[1-9]/) {
-    my $i = int($c);
-    my $prev = $GAME{curmove}->{prev};
-    # TODO also check whether we're on the main line here
-    if ($i <= $#{$prev->{variants}}) {
-      game_reset_variant $prev;
-      $prev->{next} = $prev->{variants}->[$i];
-      $GAME{curmove} = $prev->{next};
-      push @{$GAME{variant}}, $GAME{curmove};
-      game_redraw;
-    }
-  }
+  if (defined $GAME{append}) { game_appendmode_keypress $c, $key; }
+  elsif ($key == KEY_RESIZE) { game_redraw;                       }
+  elsif ($c eq 'g')          { game_goto_first;                   }
+  elsif ($c eq 'G')          { game_goto_last;                    }
+  elsif ($c eq 'j')          { game_goto_next;                    }
+  elsif ($c eq 'k')          { game_goto_prev;                    }
+  elsif ($c eq 'a')          { game_append;                       }
+  elsif ($c eq 'A')          { game_delete_and_append;            }
+  elsif ($c eq 'i')          { game_insert_variant;               }
+  elsif ($c eq 'u')          { game_undo;                         }
+  elsif ($c eq 'b')          { game_toggle_board;                 }
+  elsif ($c eq 'y')          { game_yank;                         }
+  elsif ($c eq 's')          { game_save;                         }
+  elsif ($c eq 'c')          { game_quick_comment;                }
+  elsif ($c eq 'C')          { game_ext_edit_comment;             }
+  elsif ($c eq 'E')          { game_ext_edit_pgn;                 }
+  elsif ($c eq '0')          { game_variant_up;                   }
+  elsif ($c =~ /[1-9]/)      { game_goto_variant(int($c));        }
 }
 
 sub game_show {
@@ -747,7 +806,7 @@ sub game_show {
     ($c, $key) = $win->getchar();
     game_keypress $c, $key;
   }
-  game_save;
+  game_update;
 }
 
 # TREE VIEW

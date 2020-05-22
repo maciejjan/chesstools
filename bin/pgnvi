@@ -47,13 +47,17 @@ $GAMES = $pgn->read_all();
 # - comments and variants
 #     'V' deletes the current variant (if not main line) and returns to the
 #         main line
+# - identify all cases of game_reset_variant
+# - NAGs
+# ===================================
+# later:
 # - improvements in the tree view:
 #   - compress nodes with only one child
 # - list & tree view
 #   - searching
 #   - filtering
 # - scrolling of the move list
-# - editing comments with $EDITOR
+# - implement "redo"
 # TODO metadata editing mode
 # FIXME bugs:
 # - if a board window is closed, pgnvi still tries to write to the pipe and
@@ -341,6 +345,21 @@ sub game_save {
   $game->{Game} = game_tree_to_str $GAME{movetree};
 }
 
+sub game_reset_variant {
+  my $node = shift;
+  if (!defined($node)) {
+    $node = $GAME{curmove};
+  }
+  # reset to the mainline from the current move onwards
+  my $j = $#{$GAME{variant}};
+  while (($j > -1) && ($GAME{variant}->[$j]->{mn} > $node->{mn})) {
+    $GAME{variant}->[$j]->{prev}->{next} =
+      $GAME{variant}->[$j]->{prev}->{variants}->[0];
+    $j--;
+  }
+  splice @{$GAME{variant}}, ($j+1);
+}
+
 sub game_draw_header {
   my ($x1, $y1, $x2, $y2) = @_;
   my $win = $GAME{win};
@@ -477,7 +496,7 @@ sub game_redraw {
   }
 }
 
-sub game_append_keypress {
+sub game_appendmode_keypress {
   my ($c, $key) = @_;
 
   if ($key == KEY_BACKSPACE) {
@@ -486,6 +505,18 @@ sub game_append_keypress {
   } elsif ($c eq "\n") {
     # exit the append mode
     undef $GAME{append};
+    # if nothing was added and nothing deleted, discard the change and restore
+    # the previously viewed line
+    my $change = $GAME{changes}->[-1];
+    if (!defined($change->{addnode}) && !defined($change->{delnode})) {
+      $GAME{curmove}->{next} = $change->{next};
+      pop @{$GAME{changes}};
+    }
+    # if a variant was deleted, restore the main line
+    elsif ((!defined($change->{addnode})) && ($change->{var} > 0)) {
+      $GAME{curmove}->{next} = $GAME{curmove}->{variants}->[0];
+      game_reset_variant;
+    }
     game_redraw;
   } elsif ($c =~ /[qweruiopasdfjkl;zxcvm,.\/=ntT]/) {
     $c =~ tr/qweruiopasdfjkl;zxcvm,.\/=ntT/12345678abcdefghRNBQKBNR=x+#/;
@@ -499,14 +530,31 @@ sub game_append_keypress {
     game_redraw;
   } elsif ($c eq ' ') {
     # try adding the currently appended move
+    # TODO refactor into a subroutine
     try {
-      my $lastnode = $GAME{movetree};
-      while (defined($lastnode->{next})) { $lastnode = $lastnode->{next}; }
-      my $node = game_new_node($GAME{append}, $lastnode);
-      push @{$lastnode->{variants}}, $node;
-      $lastnode->{next} = $node;
+      my $node = game_new_node($GAME{append}, $GAME{curmove});
+      my $change = $GAME{changes}->[-1];
+      if (!defined($change->{addnode}) && defined($change->{var})) {
+        # if the added move is not on the main line (this may only happen with
+        # the first added move)
+        splice @{$GAME{curmove}->{variants}}, $change->{var}, 0, $node;
+      } else {
+        # main line
+        push @{$GAME{curmove}->{variants}}, $node;
+      }
+      # if we've inserted a new variant, push it to the current variant stack
+      if ($node != $GAME{curmove}->{variants}->[0]) {
+        push @{$GAME{variant}}, $node;
+      }
+      $GAME{curmove}->{next} = $node;
       $GAME{append} = "";
       $GAME{curmove} = $node;
+      # if this is the first appended node -> set $change->{addnode} and
+      # clear the variant stack from this move onwards
+      if (!defined($GAME{changes}->[-1]->{addnode})) {
+        $GAME{changes}->[-1]->{addnode} = $node;
+        game_reset_variant;
+      }
     };
     game_redraw;
   }
@@ -518,7 +566,7 @@ sub game_keypress {
   my $last_move_idx = $#{$GAMES->[$GAME{idx}]->{GameMoves}}+1;
 
   if (defined $GAME{append}) {
-    game_append_keypress $c, $key;
+    game_appendmode_keypress $c, $key;
   } elsif ($key == KEY_RESIZE) {
     game_redraw;
   } elsif ($c eq 'g') {
@@ -537,22 +585,63 @@ sub game_keypress {
     game_redraw;
   } elsif ($c eq 'a') {
     # enter the append mode
+    while (defined($GAME{curmove}->{next})) {
+      $GAME{curmove} = $GAME{curmove}->{next};
+    }
     $GAME{append} = "";
-    push @{$GAME{changes}}, { at => $GAME{curmove}, deleted => undef };
+    push @{$GAME{changes}},
+         { at => $GAME{curmove}, var => undef, next => undef,
+           addnode => undef, delnode => undef };
     game_redraw;
   } elsif ($c eq 'A') {
     # delete everything behind the cursor and enter the append mode
+    my $idx = 0;
+    # FIXME avoid an infinite loop, check whether
+    # idx <= $#{GAME{curmove}->{variants}}
+    while ($GAME{curmove}->{next} != $GAME{curmove}->{variants}->[$idx]) {
+      $idx++;
+      #last if (++$idx > $#{$GAME{curmove}->{variants}});
+    }
+    push @{$GAME{changes}},
+         { at => $GAME{curmove}, var => $idx, next => $GAME{curmove}->{next},
+           addnode => undef, delnode => $GAME{curmove}->{next} };
     $GAME{curmove}->{next} = undef;
+    splice @{$GAME{curmove}->{variants}}, $idx, 1;
+    $GAME{append} = "";
+    game_redraw;
+  } elsif ($c eq 'v') {
+    $GAME{curmove} = $GAME{curmove}->{prev};
     $GAME{append} = "";
     push @{$GAME{changes}},
-         { at => $GAME{curmove}, deleted => $GAME{curmove}->{next} };
+         { at => $GAME{curmove}, var => undef, next => $GAME{curmove}->{next},
+           addnode => undef, delnode => undef };
+    $GAME{curmove}->{next} = undef;
+    game_reset_variant;
     game_redraw;
   } elsif ($c eq 'u') {
     # undo the last append
-    if (length @{$GAME{changes}} > 0) {
+    if (@{$GAME{changes}}) {
       my $change = pop @{$GAME{changes}};
-      $change->{at}->{next} = $change->{deleted};
       $GAME{curmove} = $change->{at};
+
+      # delete the variant that was added by the change and restore the
+      # previously deleted one
+      if (!defined($change->{var})) {
+        pop @{$GAME{curmove}->{variants}};
+        if (defined($change->{delmove})) {
+          push @{$GAME{curmove}->{variants}}, $change->{delnode};
+        }
+      } else {
+        my @add = ();
+        if (defined($change->{delnode})) {
+          push @add, $change->{delnode};
+        }
+        splice @{$GAME{curmove}->{variants}}, $change->{var}, 1, @add;
+      }
+
+      # revert the view
+      $GAME{curmove}->{next} = $change->{next};
+      game_reset_variant;
       game_redraw;
     }
   } elsif ($c eq 'b') {
@@ -627,23 +716,6 @@ sub game_keypress {
       setup_curses $GAME{win};
       game_redraw;
     }
-  } elsif ($c eq 'v') {
-    my $move = prompt_show $GAME{win}, "enter move:", "";
-    try {
-      my $node = game_new_node $move, $GAME{curmove}->{prev};
-      push @{$GAME{curmove}->{prev}->{variants}}, $node;
-      $GAME{curmove}->{prev}->{next} = $node;
-      $GAME{curmove} = $node;
-      # FIXME duplication! -- unify with line 661
-      my $j = $#{$GAME{variant}};
-      while (($j > -1) && ($GAME{variant}->[$j]->{mn} >= $GAME{curmove}->{mn})) {
-        $GAME{variant}->[$j]->{prev}->{next} =
-          $GAME{variant}->[$j]->{prev}->{variants}->[0];
-        $j--;
-      }
-      push @{$GAME{variant}}, $GAME{curmove};
-      game_redraw;
-    }
   } elsif ($c eq '0') {
     my $node = pop @{$GAME{variant}};
     if (defined($node)) {
@@ -656,13 +728,7 @@ sub game_keypress {
     my $prev = $GAME{curmove}->{prev};
     # TODO also check whether we're on the main line here
     if ($i <= $#{$prev->{variants}}) {
-      my $j = $#{$GAME{variant}};
-      while (($j > -1) && ($GAME{variant}->[$j]->{mn} >= $GAME{curmove}->{mn})) {
-        $GAME{variant}->[$j]->{prev}->{next} =
-          $GAME{variant}->[$j]->{prev}->{variants}->[0];
-        $j--;
-      }
-      splice @{$GAME{variant}}, ($j+1);
+      game_reset_variant $prev;
       $prev->{next} = $prev->{variants}->[$i];
       $GAME{curmove} = $prev->{next};
       push @{$GAME{variant}}, $GAME{curmove};

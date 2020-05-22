@@ -76,19 +76,6 @@ sub move_number {
   return int($mn/2+0.5) . "." . ($mn % 2 == 0 ? ".." : "");
 }
 
-sub number_moves {
-  my $mn = 0;
-  my @result = ();
-  while (my $move = shift @_) {
-    if ($mn % 2 == 0) {
-      push @result, int($mn/2+1).".";
-    }
-    push @result, $move;
-    $mn++;
-  }
-  return @result;
-}
-
 sub print_game {
   my $fh = shift;
   my $game = shift;

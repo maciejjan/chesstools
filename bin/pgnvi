@@ -609,7 +609,7 @@ sub game_keypress {
     splice @{$GAME{curmove}->{variants}}, $idx, 1;
     $GAME{append} = "";
     game_redraw;
-  } elsif ($c eq 'v') {
+  } elsif ($c eq 'i') {
     $GAME{curmove} = $GAME{curmove}->{prev};
     $GAME{append} = "";
     push @{$GAME{changes}},

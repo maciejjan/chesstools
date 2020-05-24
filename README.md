@@ -178,26 +178,6 @@ makemoves | tee positions.txt | drawboard
 If you enter a valid FEN position into `makemoves`, it will reset to it and
 output it.
 
-## TODO
-
-**pgnvi:**
-
-- non-standard starting positions (the `FEN` tag)
-- metadata editing
-- comments
-- variants
-- searching and filtering game lists
-- fixing numerous bugs
-- rebinding keys (including the append mode keyboard)
-- customizability in general
-- more user-friendly UI
-- (?) interface to UCI chess engines (e.g. Stockfish)
-- much more...
-
-**drawboard:**
-
-- some rudimentary customization, e.g. square colors
-
 # Disclaimer / Caution
 
 The software is currently in alpha stage and might be unstable. Please backup

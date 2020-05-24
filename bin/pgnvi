@@ -8,6 +8,12 @@ use utf8;
 use Chess::Rep;
 use Chess::PGN::Parse;
 
+# TODO correct the coding style
+# - last element of an array: $arr_ref->[-1];
+# - iterating over arrays: foreach instead of counters
+# - subroutine parameters: use @_ instead of shift
+# - refactor larger subroutines (especially \*_keypress)
+
 our %GAME;
 our %PROMPT;
 our $BOARD;
@@ -59,25 +65,6 @@ our $FILENAME = $ARGV[0];
 $pgn = new Chess::PGN::Parse "$FILENAME"
   || die "Could not open file: $FILENAME";
 $GAMES = $pgn->read_all();
-
-# TODO (for v 0.2)
-# - correct the coding style
-#   - last element of an array: $arr_ref->[-1];
-#   - iterating over arrays: foreach instead of counters
-#   - subroutine parameters: use @_ instead of shift
-#   - refactor larger subroutines (especially *_keypress)
-# ===================================
-# later:
-# - improvements in the tree view:
-#   - compress nodes with only one child
-# - list & tree view
-#   - searching
-#   - filtering
-# - scrolling of the move list
-# - implement "redo"
-# FIXME bugs:
-# - if a board window is closed, pgnvi still tries to write to the pipe and
-#   crashes
 
 sub yank {
   my $arg = shift;

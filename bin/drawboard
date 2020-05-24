@@ -3,11 +3,6 @@
 use Tk;
 use Tk::PNG;
 
-# TODO
-# - check the validity of the position before setting it
-# - 'r' to reverse the board
-# - 'j/k' to browse the positions history
-
 our $LINGER = (($#ARGV >= 0) && ($ARGV[0] eq "-l"));
 
 our %COLORS = (

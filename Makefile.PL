@@ -2,7 +2,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
   NAME          => 'chesstools',
-  VERSION       => '0.1.0-alpha',
+  VERSION       => '0.2.0-alpha',
   EXE_FILES     => ["bin/drawboard", "bin/makemoves", "bin/pgnindex",
                     "bin/pgnvi"],
   PREREQ_PM     => {

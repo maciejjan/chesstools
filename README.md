@@ -72,18 +72,64 @@ browsing large databases.
 
 ![game view screenshot](doc/img/game-view.png)
 
-The game view is used for viewing and editing a single game.
+The game view is used for viewing and editing a single game. It mainly shows a
+header containing metadata and a list of the game's moves, which can be
+navigated by j/k keys. A separate "append mode", accessible with `a`/`A`/`i`,
+is used for entering moves.
+
+There is a partial support of Numeric Annotation Glyphs (NAGs). All originally
+present glyphs are preserved when the PGN file is loaded and saved, but only
+the most commonly used ones, namely those related to the move ($1-$6) and
+position assessment ($10-$19) are manipulated by the editor. They are treated
+as mutually exclusive and linearly ordered, so that they can be changed by
+"decrease/increase" operations, bound to `[`/`]` for moves and `-`/`+` for
+positions. Additionally, `=` toggles between the "equal position" assessment
+and "no glyph" and thus can be used for removing the glyph.
+
+Side lines (a.k.a. Recursive Annotation Variations) are supported. If a move
+contains side lines, they are shown in a numbered list below the move list,
+e.g. `[1]e4 [2]e3`. Hitting the corresponding digit key switches to the side
+line. Because they are accessed with digit keys, there currently is a somewhat
+unnecessary limit of 9 side lines per move, but more is hardly ever needed. The
+currently chosen side line is shown in a status bar at the bottom of the screen
+and hitting `0` reverts the most recently chosen side line to the main line.
+Hitting `i` creates a new side line at the current move and switches to the
+append mode.
+
+Bracketed comments are fully supported. The comments referring to the current
+move are shown under the move list, if present. There are two ways of editing
+them: the first comment can be edited directly from **pgnvi** by hitting `c`.
+This is especially useful for short comments. Alternatively, all comments can
+be edited at once with an external text editor by hitting `C`. The different
+comments are then separated by blank lines. There is no support for
+non-brackeded (escaped and line) comments and they are discarded when loading
+the PGN file.
+
+For editing tasks not covered with the editor's functionality, an external text
+editor can be launched with `E` to edit directly the game's PGN. This is
+currently the only way to edit the game metadata.
 
 ### Keybindings
 
 * **g**/**G** - go to beginning/end
 * **j**/**k** - go one move forward/back
-* **b** - toggle board
 * **y** - yank the current position to X selection (requires `xclip`)
 * **a** - enter append mode
 * **A** - delete all moves behind the cursor and enter append mode
+* **i** - start a new side line at the current position
 * **u** - undo the latest delete/append
+* **c** - edit the first comment of the current move in a prompt
+* **C** - edit all comments of the current move using $EDITOR
+* **E** - edit the whole game PGN using $EDITOR
+* **0** - revert the most recent side line to main line
+* **1-9** - switch to the chosen side line
+* **[** - change the move assessment to one step worse
+* **]** - change the move assessment to one step better
+* **-** - change the position assessment to one step worse
+* **=** - toggle the position assessment between equal and none
+* **+** - change the position assessment to one step better
 * **s** - save PGN (**OVERWRITES WITHOUT ASKING**)
+* **b** - toggle board
 * **q** - quit the game view
 
 ### Append mode
@@ -181,10 +227,7 @@ output it.
 # Disclaimer / Caution
 
 The software is currently in alpha stage and might be unstable. Please backup
-all files you're working with. Especially, **if you open a file that contains
-unsupported elements (like comments or variants) and use the "save" option,
-they will be lost without a warning**. Obviously, this is considered a bug and
-will be fixed soon.
+all files you're working with.
 
 # Acknowledgements
 

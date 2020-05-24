@@ -1179,3 +1179,156 @@ list_show $win;
 curs_set(1);
 endwin;
 
+=head1 NAME
+
+pgnvi - a vi-like editor and browser for PGN files
+
+=head1 SYNOPSIS
+
+pgnvi PGN_FILE
+
+=head1 DESCRIPTION
+
+This is a TUI editor for chess games stored in Portable Game Notation (PGN). It
+is highly inspired by the vi text editor: most of the functionality is accessed
+by hitting single letter keys on the keyboard. It features three different
+views: list view for high-level searching and management of games, tree view
+for exploring the whole game collection move by move (similar to the opening
+explorers available on the Web) and game view for viewing and editing a
+single game. The latter features a modal user interface, in which a separate
+"append mode" is used for entering moves. The editor can work together with a
+tool like drawboard(1) for graphical visualization of the currently browsed
+position.
+
+=head2 List view
+
+This is the view in which B<pgnvi> starts. Right now it's not very useful, but 
+it will be when the planned searching and filtering functionalities are
+implemented.
+
+=head3 Keybindings
+
+ g         go to the beginning
+ G         go to the end
+ k         go up
+ j         go down
+ t         open tree view
+ <Enter>   open game
+ q         quit program
+
+=head2 Tree view
+
+The tree view can be used as an opening explorer. It is particularly useful for
+browsing large databases.
+
+=head3 Keybindings
+
+ g        go to the beginning
+ G        go to the end
+ k        go up
+ j        go down
+ h        collapse node
+ l        expand node
+ b        toggle board
+ <Space>  toggle expand/collapse node
+ <Enter>  (on a non-leaf node) - toggle expand/collapse node
+ <Enter>  (on a leaf node) - open game
+ q        quit the tree view
+
+=head2 Game view
+
+The game view is used for viewing and editing a single game. It mainly shows a
+header containing metadata and a list of the game's moves, which can be
+navigated by j/k keys. A separate "append mode", accessible with a/A/i, is used
+for entering moves.
+
+There is a partial support of Numeric Annotation Glyphs (NAGs). All originally
+present glyphs are preserved when the PGN file is loaded and saved, but only
+the most commonly used ones, namely those related to the move ($1-$6) and
+position assessment ($10-$19) are manipulated by the editor. They are treated
+as mutually exclusive and linearly ordered, so that they can be changed by
+"decrease/increase" operations, bound to '['/']' for moves and '-'/'+' for
+positions. Additionally, '=' toggles between the "equal position" assessment
+and "no glyph" and thus can be used for removing the glyph.
+
+Side lines (a.k.a. Recursive Annotation Variations) are supported. If a move
+contains side lines, they are shown in a numbered list below the move list,
+e.g. [1]e4 [2]e3. Hitting the corresponding digit key switches to the side
+line. Because they are accessed with digit keys, there currently is a somewhat
+unnecessary limit of 9 side lines per move, but more is hardly ever needed. The
+currently chosen side line is shown in a status bar at the bottom of the screen
+and hitting '0' reverts the most recently chosen side line to the main line.
+Hitting 'i' creates a new side line at the current move and switches to the
+append mode.
+
+Bracketed comments are fully supported. The comments referring to the current
+move are shown under the move list, if present. There are two ways of editing
+them: the first comment can be edited directly from B<pgnvi> by hitting 'c'.
+This is especially useful for short comments. Alternatively, all comments can
+be edited at once with an external text editor by hitting 'C'. The different
+comments are then separated by blank lines. There is no support for
+non-brackeded (escaped and line) comments and they are discarded when loading
+the PGN file.
+
+For editing tasks not covered with the editor's functionality, an external text
+editor can be launched with 'E' to edit directly the game's PGN. This is
+currently the only way to edit the game metadata.
+
+=head3 Keybindings in normal mode
+
+ g        go to the beginning
+ G        go to the end
+ k        go up
+ j        go down
+ y        yank the current position to xclip
+ a        go to the end and enter append mode
+ A        delete everything behind the cursor and enter append mode
+ i        start a new side line at the current position
+ u        undo the last append/delete operation
+ c        edit the first comment of the current move in a prompt
+ C        edit all comments of the current move using $EDITOR
+ E        edit the whole game PGN using $EDITOR
+ 0        revert the most recent side line to main line
+ 1-9      switch to the chosen side line
+ [        change the move assessment to one step worse
+ ]        change the move assessment to one step better
+ -        change the position assessment to one step worse
+ =        toggle the position assessment between equal and none
+ +        change the position assessment to one step better
+ s        save the PGN
+ b        toggle board
+ q        quit the game view
+
+=head3 Keybindings in append mode
+
+ qweruiop     rank numbers 1-8
+ asdfjkl;     file letters a-h
+ zxcv         queenside pieces (R N B Q)
+ m,./         kingside pieces (K B N R)
+ n            x (capture)
+ t            + (check)
+ T            # (checkmate)
+ y            O-O (kingside castle)
+ Y            O-O-O (queenside castle)
+ =            = (pawn promotion)
+ <Backspace>  delete the last character
+ <Space>      append the current move and proceed
+ <Enter>      exit the append mode
+
+=head1 ENVIRONMENT VARIABLES
+
+ EDITOR       the external text editor to use
+
+=head1 LICENSE
+
+GPLv3
+
+=head1 BUGS
+
+Please report bugs to: <http://gitlab.com/mmj/chesstools>
+
+=head1 AUTHOR
+
+Maciej Janicki <mail(at)macjanicki.eu>
+
+=cut

@@ -66,10 +66,6 @@ $GAMES = $pgn->read_all();
 #   - iterating over arrays: foreach instead of counters
 #   - subroutine parameters: use @_ instead of shift
 #   - refactor larger subroutines (especially *_keypress)
-# - comments and variants
-#     'V' deletes the current variant (if not main line) and returns to the
-#         main line
-# - identify all cases of game_reset_variant
 # ===================================
 # later:
 # - improvements in the tree view:
@@ -79,7 +75,6 @@ $GAMES = $pgn->read_all();
 #   - filtering
 # - scrolling of the move list
 # - implement "redo"
-# TODO metadata editing mode
 # FIXME bugs:
 # - if a board window is closed, pgnvi still tries to write to the pipe and
 #   crashes

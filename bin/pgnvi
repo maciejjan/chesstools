@@ -28,6 +28,28 @@ our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 our $BOARDCMD = "drawboard";
 our $YANKCMD = "xclip -i";
 
+# the text values of some Numeric Annotation Glyphs
+our %NAGTEXT = (
+  1  => "!", 2  => "?", 3  => "!!",  4  => "??",  5  => "!?",  6  => "?!",
+  10 => "=", 11 => "=", 12 => "=",  13 => "∞",   14 => "⩲",   15 => "⩱",
+  16 => "±", 17 => "∓", 18 => "+−", 19 => "−+",
+);
+
+# The ordering of some NAGs:
+# - move assessment: ?? < ? < ?! < none < !? < ! < !!
+# - position assesment: −+ < ∓ < ⩱ < = < ⩲ < ± < +−
+# so that they can be changed on a step-wise basis.
+our %NAGNEXT = (
+  1 => 3, 2 => 6, 3 => 3, 4 => 2, 5 => 1, 6 => 0, 0 => 5,
+  10 => 14, 11 => 14, 12 => 14, 13 => 14, 14 => 16, 15 => 10,
+  16 => 18, 17 => 15, 18 => 18, 19 => 17
+);
+our %NAGPREV = (
+  1 => 5, 2 => 4, 3 => 1, 4 => 4, 5 => 0, 6 => 2, 0 => 6,
+  10 => 15, 11 => 15, 12 => 15, 13 => 15, 14 => 10, 15 => 17,
+  16 => 14, 17 => 19, 18 => 16, 19 => 19
+);
+
 if (($#ARGV < 0) || ($ARGV[0] eq "-h") || ($ARGV[0] eq "--help")) {
   die "usage: pgnvi PGN_FILE";
 }
@@ -48,7 +70,6 @@ $GAMES = $pgn->read_all();
 #     'V' deletes the current variant (if not main line) and returns to the
 #         main line
 # - identify all cases of game_reset_variant
-# - NAGs
 # ===================================
 # later:
 # - improvements in the tree view:
@@ -224,7 +245,7 @@ sub game_new_node {
     mn => 0,
     prev => undef,
     next => undef,
-    NAG => [],
+    NAG => { move => 0, position => 0, misc => [] },
     variants => [],
     comments => [],
   };
@@ -267,7 +288,18 @@ sub game_parse {
     $prevnode->{next} = $node;
     my $hmn = int($node->{mn}/2+0.5) . ($node->{mn} % 2 == 1 ? "w" : "b");
     if (defined($comments->{$hmn}->{NAG})) {
-      $node->{NAG} = $comments->{$hmn}->{NAG};
+      for (@{$comments->{$hmn}->{NAG}}) {
+        if (/\$([0-9]+)/) {
+          my $nag = int $1;
+          if (($nag >= 1) && ($nag <= 6)) {
+            $node->{NAG}->{move} = $nag;
+          } elsif (($nag >= 10) && ($nag <= 19)) {
+            $node->{NAG}->{position} = $nag;
+          } else {
+            push @{$node->{NAG}->{misc}}, $nag;
+          }
+        }
+      }
     }
     if (defined($comments->{$hmn}->{RAV})) {
       for (@{$comments->{$hmn}->{RAV}}) {
@@ -311,6 +343,15 @@ sub game_tree_to_str {
       push @result, move_number($node->{mn});
     }
     push @result, $node->{move};
+    if ($node->{NAG}) {
+      my @nags = ($node->{NAG}->{move}, $node->{NAG}->{position});
+      push @nags, @{$node->{NAG}->{misc}};
+      for (@nags) {
+        if ($_ > 0) {
+          push @result, '$'.$_;
+        }
+      }
+    }
     for (@{$node->{comments}}) {
       if ($_) { push @result, "{$_}"; }
     }
@@ -380,6 +421,8 @@ sub game_draw_moves_list {
   my ($cx, $cy) = ($x1, $y1);
 
   my $n = $GAME{movetree};
+
+  # TODO refactor the conversion of move to string to a separate function!
   do {
     $n = $n->{next};
     my $mn = int(($n->{mn}+1)/2).".";
@@ -398,9 +441,18 @@ sub game_draw_moves_list {
       $win->attron(A_REVERSE);
     }
     $win->addstring($cy, $cx, $n->{move});
-    $cx += length($n->{move}) + 1;
+    $cx += length($n->{move});
+    if ($n->{NAG}->{move} > 0) {
+      $win->addstring($cy, $cx, $NAGTEXT{$n->{NAG}->{move}});
+      $cx += length $NAGTEXT{$n->{NAG}->{move}};
+    }
     if (($n == $GAME{curmove}) && !defined($GAME{append})) {
       $win->attroff(A_REVERSE);
+    }
+    $cx += 1;
+    if ($n->{NAG}->{position} > 0) {
+      $win->addstring($cy, $cx, $NAGTEXT{$n->{NAG}->{position}});
+      $cx += length($NAGTEXT{$n->{NAG}->{position}})+1;
     }
   } while (defined($n->{next}));
   # append mode cursor
@@ -762,6 +814,41 @@ sub game_goto_variant {
   }
 }
 
+# change the move assessment to one step better (e.g. from ! to !!)
+sub game_move_nag_up {
+  $GAME{curmove}->{NAG}->{move} = $NAGNEXT{$GAME{curmove}->{NAG}->{move}};
+  game_redraw;
+}
+
+# change the move assessment to one step worse (e.g. from ? to ??)
+sub game_move_nag_down {
+  $GAME{curmove}->{NAG}->{move} = $NAGPREV{$GAME{curmove}->{NAG}->{move}};
+  game_redraw;
+}
+
+# change the position assessment to one step better
+sub game_position_nag_up {
+  $GAME{curmove}->{NAG}->{position} = $NAGNEXT{$GAME{curmove}->{NAG}->{position}};
+  game_redraw;
+}
+
+# change the position assessment to one step worse
+sub game_position_nag_down {
+  $GAME{curmove}->{NAG}->{position} = $NAGPREV{$GAME{curmove}->{NAG}->{position}};
+  game_redraw;
+}
+
+# change the position assessment to equal; if it is already set
+# to equal ($10), remove it altoghether
+sub game_position_nag_equal {
+  if ($GAME{curmove}->{NAG}->{position} == 10) {
+    undef $GAME{curmove}->{NAG}->{position};
+  } else {
+    $GAME{curmove}->{NAG}->{position} = 10;
+  }
+  game_redraw;
+}
+
 sub game_keypress {
   my ($c, $key) = @_;
 
@@ -782,6 +869,11 @@ sub game_keypress {
   elsif ($c eq 'C')          { game_ext_edit_comment;             }
   elsif ($c eq 'E')          { game_ext_edit_pgn;                 }
   elsif ($c eq '0')          { game_variant_up;                   }
+  elsif ($c eq ']')          { game_move_nag_up;                  }
+  elsif ($c eq '[')          { game_move_nag_down;                }
+  elsif ($c eq '-')          { game_position_nag_down;            }
+  elsif ($c eq '+')          { game_position_nag_up;              }
+  elsif ($c eq '=')          { game_position_nag_equal;           }
   elsif ($c =~ /[1-9]/)      { game_goto_variant(int($c));        }
 }
 

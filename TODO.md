@@ -13,6 +13,7 @@
 - customizability in general
 - more user-friendly UI
 - (?) interface to UCI chess engines (e.g. Stockfish)
+- save non-standard tags
 - much more...
 
 ### Bugs

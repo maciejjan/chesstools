@@ -82,8 +82,9 @@ sub move_number {
 sub print_game {
   my $fh = shift;
   my $game = shift;
-  for my $key (keys %$game) {
-    if (($key =~ /^[A-Z].*/) && ($key !~ /Game.*/)) {
+  # FIXME what about other tags, like WhiteElo, WhiteTitle etc.?
+  for my $key (Chess::PGN::Parse::STR()) {
+    if (defined($game->{$key})) {
       print $fh "[$key \"$game->{$key}\"]\n";
     }
   }

@@ -25,6 +25,7 @@
 - many elements are not properly wrapped over line boundaries (game view:
   append mode cursor, annotation glyphs, comments, variants; list view: the
   list rows)
+- game screen crashes on an illegal move
 
 ## drawboard
 

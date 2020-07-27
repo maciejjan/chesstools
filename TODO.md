@@ -20,7 +20,6 @@
 
 - if a board window is closed, pgnvi still tries to write to the pipe and
   crashes
-- non-ASCII characters in comments are not rendered properly
 - sometimes when hitting `b` in the game view, the board doesn't open (or opens
   and closes immediately?) and the editor exits the game view
 - many elements are not properly wrapped over line boundaries (game view:

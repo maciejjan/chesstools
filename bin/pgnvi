@@ -4,9 +4,11 @@ use Curses;
 use File::Temp qw/tempfile/;
 use Try::Tiny;
 use utf8;
+use open qw(:std :utf8);
 
 use Chess::Rep;
 use Chess::PGN::Parse;
+use Chess::PGN::Parse::FileHandle;
 
 # TODO correct the coding style
 # - last element of an array: $arr_ref->[-1];
@@ -61,10 +63,12 @@ if (($#ARGV < 0) || ($ARGV[0] eq "-h") || ($ARGV[0] eq "--help")) {
 }
 
 our $FILENAME = $ARGV[0];
+open $fh, "<", $FILENAME || die "Cannot open file: $FILENAME";
 
-$pgn = new Chess::PGN::Parse "$FILENAME"
-  || die "Could not open file: $FILENAME";
+$pgn = new Chess::PGN::Parse::FileHandle $fh
+  || die "Could not read from file: $FILENAME";
 $GAMES = $pgn->read_all();
+close $fh;
 
 sub yank {
   my $arg = shift;

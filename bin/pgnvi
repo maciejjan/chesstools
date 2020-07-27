@@ -833,26 +833,28 @@ sub game_move_nag_down {
   game_redraw;
 }
 
+# change the position assessment to equal; if it is already set
+# to equal ($10), remove it altoghether
+sub game_position_nag_equal {
+  if ($GAME{curmove}->{NAG}->{position} == 10) {
+    $GAME{curmove}->{NAG}->{position} = 0;
+  } else {
+    $GAME{curmove}->{NAG}->{position} = 10;
+  }
+  game_redraw;
+}
+
 # change the position assessment to one step better
 sub game_position_nag_up {
+  ($GAME{curmove}->{NAG}->{position} > 0) || game_position_nag_equal;
   $GAME{curmove}->{NAG}->{position} = $NAGNEXT{$GAME{curmove}->{NAG}->{position}};
   game_redraw;
 }
 
 # change the position assessment to one step worse
 sub game_position_nag_down {
+  ($GAME{curmove}->{NAG}->{position} > 0) || game_position_nag_equal;
   $GAME{curmove}->{NAG}->{position} = $NAGPREV{$GAME{curmove}->{NAG}->{position}};
-  game_redraw;
-}
-
-# change the position assessment to equal; if it is already set
-# to equal ($10), remove it altoghether
-sub game_position_nag_equal {
-  if ($GAME{curmove}->{NAG}->{position} == 10) {
-    undef $GAME{curmove}->{NAG}->{position};
-  } else {
-    $GAME{curmove}->{NAG}->{position} = 10;
-  }
   game_redraw;
 }
 

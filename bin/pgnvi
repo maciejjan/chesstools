@@ -16,6 +16,9 @@ use Chess::PGN::Parse::FileHandle;
 # - subroutine parameters: use @_ instead of shift
 # - refactor larger subroutines (especially \*_keypress)
 
+# TODO
+# - refactor game_draw_moves_list 
+
 our %GAME;
 our %PROMPT;
 our $BOARD;
@@ -35,6 +38,21 @@ our @LIST_FIELDS = ("No", "White", "Black", "Year", "Result", "ECO");
 
 our $BOARDCMD = "drawboard";
 our $YANKCMD = "xclip -i";
+
+# based on: http://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm
+our @TAGNAMES = qw(
+  Event Site Date Round White Black Result
+  WhiteTitle BlackTitle WhiteElo BlackElo WhiteUSCF BlackUSCF
+  WhiteNA BlackNA WhiteType BlackType
+  EventDate EventSponsor Section Stage Board
+  Opening Variation SubVariation
+  ECO NIC
+  Time UTCTime UTCDate
+  TimeControl
+  SetUp FEN
+  Termination
+  Annotator Mode PlyCount
+);
 
 # the text values of some Numeric Annotation Glyphs
 our %NAGTEXT = (
@@ -83,24 +101,24 @@ sub move_number {
   return int($mn/2+0.5) . "." . ($mn % 2 == 0 ? ".." : "");
 }
 
-sub print_game {
-  my $fh = shift;
+sub game_to_str {
   my $game = shift;
-  # FIXME what about other tags, like WhiteElo, WhiteTitle etc.?
-  for my $key (Chess::PGN::Parse::STR()) {
+  my $result = "";
+  for my $key (@TAGNAMES) {
     if (defined($game->{$key})) {
-      print $fh "[$key \"$game->{$key}\"]\n";
+      $result .= "[$key \"$game->{$key}\"]\n";
     }
   }
-  print $fh "\n";
-  print $fh $game->{Game}."\n\n";
+  $result .= "\n";
+  $result .= $game->{Game};
+  return $result;
 }
 
 sub save {
   my $filename = shift;
   open $fh, "+>", $filename;
   for my $game (@$GAMES) {
-    print_game $fh, $game;
+    print $fh game_to_str($game)."\n\n";
   }
   close $fh;
 }
@@ -225,10 +243,10 @@ sub prompt_show {
 # GAME VIEW
 
 sub game_new_node {
-  my ($move, $parent) = @_;
+  my (%args) = @_;
   my $node = {
     pos => undef,
-    move => $move,
+    move => $args{move},
     mn => 0,
     prev => undef,
     next => undef,
@@ -236,15 +254,18 @@ sub game_new_node {
     variants => [],
     comments => [],
   };
-  if (defined($parent)) {
-    $node->{prev} = $parent;
-    $node->{pos} = new Chess::Rep($parent->{pos}->get_fen);
-    $node->{pos}->go_move($move);
-    $node->{mn} = $parent->{mn}+1;
+  if (defined($args{parent})) {
+    $node->{prev} = $args{parent};
+    $node->{pos} = new Chess::Rep($args{parent}->{pos}->get_fen);
+    $node->{pos}->go_move($args{move});
+    $node->{mn} = $args{parent}->{mn}+1;
   } else {
     $node->{pos} = new Chess::Rep;
-    if (defined($move)) {
-      $node->{pos}->go_move($move);
+    if (defined($args{FEN})) {
+      $node->{pos}->set_from_fen($args{FEN});
+      $node->{mn} = 1-$node->{pos}->to_move;
+    } elsif (defined($args{move})) {
+      $node->{pos}->go_move($args{move});
     }
   }
   return $node;
@@ -261,16 +282,16 @@ sub game_parse {
 
   my $root;
   if (!defined($parent)) {
-    $root = game_new_node (undef, undef);
+    $root = game_new_node(FEN => $game->tags()->{FEN});
   } else {
     my $nextmove = shift @$moves;
-    $root = game_new_node($nextmove, $parent);
+    $root = game_new_node(move => $nextmove, parent => $parent);
   }
 
   my ($node, $prevnode) = ($root, undef);
   for (@$moves) {
     $prevnode = $node;
-    $node = game_new_node $_, $prevnode;
+    $node = game_new_node(move => $_, parent => $prevnode);
     push @{$prevnode->{variants}}, $node;
     $prevnode->{next} = $node;
     my $hmn = int($node->{mn}/2+0.5) . ($node->{mn} % 2 == 1 ? "w" : "b");
@@ -355,7 +376,6 @@ sub game_tree_to_str {
 
 sub game_update {
   my $game = $GAMES->[$GAME{idx}];
-  #print STDERR game_tree_to_str($GAME{movetree});   # DEBUG
   $game->{GameMoves} = game_tree_to_movelist;
   $game->{Game} = game_tree_to_str $GAME{movetree};
 }
@@ -412,8 +432,8 @@ sub game_draw_moves_list {
   # TODO refactor the conversion of move to string to a separate function!
   do {
     $n = $n->{next};
-    my $mn = int(($n->{mn}+1)/2).".";
-    if ($n->{mn} % 2 == 1) {
+    my $mn = int(($n->{mn}+1)/2)."." . ($n->{prev}->{pos}->to_move() == 0 ? ".." : "");
+    if (($n->{prev}->{pos}->to_move() != 0) || ($n->{prev} == $GAME{movetree})) {
        my $nextlength = length("$mn $n->{move} "
                                . (defined($n->{next}) ? $n->{next}->{move} : ""));
       if ($cx + $nextlength > $x2) {
@@ -559,7 +579,7 @@ sub game_appendmode_keypress {
     # try adding the currently appended move
     # TODO refactor into a subroutine
     try {
-      my $node = game_new_node($GAME{append}, $GAME{curmove});
+      my $node = game_new_node(move => $GAME{append}, parent => $GAME{curmove});
       my $change = $GAME{changes}->[-1];
       if (!defined($change->{addnode}) && defined($change->{var})) {
         # if the added move is not on the main line (this may only happen with
@@ -759,7 +779,7 @@ sub game_ext_edit_pgn {
   if (defined($ENV{EDITOR})) {
     game_update;
     my ($fh, $filename) = tempfile(UNLINK => 1);
-    print_game $fh, $GAMES->[$GAME{idx}];
+    print $fh game_to_str($GAMES->[$GAME{idx}]);
     close $fh;
     system $ENV{EDITOR}, $filename;
     open $fh, "<", $filename;
@@ -769,7 +789,7 @@ sub game_ext_edit_pgn {
     my $game = new Chess::PGN::Parse undef, $gametext;
     $game->read_game;
     $GAMES->[$GAME{idx}] = $game->tags;
-    $GAME{movetree} = game_parse($GAMES->[$GAME{idx}]->{Game}, undef);
+    $GAME{movetree} = game_parse(game_to_str($GAMES->[$GAME{idx}]), undef);
     $GAME{curmove} = $GAME{movetree};
     endwin;
     setup_curses $GAME{win};
@@ -873,7 +893,7 @@ sub game_show {
   %GAME = (
     win => $win, idx => $idx, curmove => undef, board => 0,
     append => undef, changes => [], comments => undef, variant => [] );
-  $GAME{movetree} = game_parse($GAMES->[$idx]->{Game}, undef);
+  $GAME{movetree} = game_parse(game_to_str($GAMES->[$idx]), undef);
   $GAME{curmove} = $GAME{movetree};
   for (my $i = 0; $i < $move_idx; $i++) {
     $GAME{curmove} = $GAME{curmove}->{next};

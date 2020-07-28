@@ -1,5 +1,8 @@
 0.2.1-alpha
 - support UTF-8 comments
+- support the FEN tag (for setting the initial position) and other
+  non-standard tags
+- fixed the line wrapping in the move list
 
 0.2.0-alpha
 - pgnvi: support for comments, side lines and annotation glyphs

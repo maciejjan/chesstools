@@ -16,9 +16,6 @@ use Chess::PGN::Parse::FileHandle;
 # - subroutine parameters: use @_ instead of shift
 # - refactor larger subroutines (especially \*_keypress)
 
-# TODO
-# - refactor game_draw_moves_list 
-
 our %GAME;
 our %PROMPT;
 our $BOARD;
@@ -421,65 +418,92 @@ sub game_draw_header {
   $win->attroff(A_BOLD);
 }
 
-sub game_draw_moves_list {
-  my ($x1, $y1, $x2, $y2) = @_;
-
-  my $win = $GAME{win};
-  my ($cx, $cy) = ($x1, $y1);
-
+# list all tokens appearing on the move list (move numbers, moves, NAGs)
+sub game_prepare_move_list {
+  my @tokens = ();
   my $n = $GAME{movetree};
-
-  # TODO refactor the conversion of move to string to a separate function!
+  my $i = 0;
   do {
     $n = $n->{next};
+    # add move number if white is to move or if this is the first move
     my $mn = int(($n->{mn}+1)/2)."." . ($n->{prev}->{pos}->to_move() == 0 ? ".." : "");
     if (($n->{prev}->{pos}->to_move() != 0) || ($n->{prev} == $GAME{movetree})) {
-       my $nextlength = length("$mn $n->{move} "
-                               . (defined($n->{next}) ? $n->{next}->{move} : ""));
-      if ($cx + $nextlength > $x2) {
-        $cx = $x1;
-        $cy++;
-        last if $cy > $y2;
-      }
-      $win->addstring($cy, $cx, "$mn");
-      $cx += length($mn) + 1;
-    } 
-    if (($n == $GAME{curmove}) && !defined($GAME{append})) {
-      $win->attron(A_REVERSE);
+       push @tokens, "\n";
+       push @tokens, $mn;
     }
-    $win->addstring($cy, $cx, $n->{move});
-    $cx += length($n->{move});
-    if ($n->{NAG}->{move} > 0) {
-      $win->addstring($cy, $cx, $NAGTEXT{$n->{NAG}->{move}});
-      $cx += length $NAGTEXT{$n->{NAG}->{move}};
-    }
-    if (($n == $GAME{curmove}) && !defined($GAME{append})) {
-      $win->attroff(A_REVERSE);
-    }
-    $cx += 1;
+    # add the move
+    my $hl = ($n == $GAME{curmove}) && !defined($GAME{append});
+    $hl && push @tokens, "<HL>";
+    push @tokens, $n->{move} . ($NAGTEXT{$n->{NAG}->{move}} ? $NAGTEXT{$n->{NAG}->{move}} : "");
+    $hl && push @tokens, "</HL>";
+    # add the position glyph
     if ($n->{NAG}->{position} > 0) {
-      $win->addstring($cy, $cx, $NAGTEXT{$n->{NAG}->{position}});
-      $cx += length($NAGTEXT{$n->{NAG}->{position}})+1;
+      push @tokens, $NAGTEXT{$n->{NAG}->{position}};
     }
+    $i++;
   } while (defined($n->{next}));
-  # append mode cursor
-  # TODO going to the next line if the text exceeds the line width
+
+  # add the append mode cursor if present
   if (defined($GAME{append})) {
-    my $appendstr = $GAME{append} ? $GAME{append} : " ";
     if ($n->{mn} % 2 == 0) {
-      $appendstr = int($n->{mn}/2+1). ". " . $appendstr;
+      push @tokens, "\n";
+      push @tokens, int($n->{mn}/2+1) . ".";
     }
-    $win->attron(A_REVERSE);
-    $win->addstring($cy, $cx, $appendstr);
-    $win->attroff(A_REVERSE);
-    $cx += length($appendstr)+1;
+    push @tokens, "<HL>", ($GAME{append} ? $GAME{append} : " "), "</HL>";
   }
-  # append the result to the moves list
-  # TODO only if in main line!
+
+  # append the result to the move list
   if ((defined($GAMES->[$GAME{idx}]->{Result})) && (!@{$GAME{variant}})) {
-    my $result = $GAMES->[$GAME{idx}]->{Result};
-    if ($cx + length($result) > $x2) { $cx = $x1; $cy++; }
-    $win->addstring($cy, $cx, $result);
+    push @tokens, $GAMES->[$GAME{idx}]->{Result};
+  }
+
+  return \@tokens;
+}
+
+# remove unnecessary line breaks from the move list
+sub game_format_move_list {
+  my ($tokens, $maxlen) = @_;
+
+  my $ll = 0;          # current line length (after formatting)
+  my $cll = 0;         # current line length (before formatting)
+  my $pnl = 0;         # position of the previous "\n" in the tokens list
+  for (my $i = 0; $i <= $#$tokens; $i++) {
+    if ($tokens->[$i] eq "\n") {
+      if ($ll <= $maxlen) {     # remove the previous newline
+        if ($pnl >= 0) { splice @$tokens, $pnl, 1; $i--; }
+        $pnl = $i;
+        $cll = 0;
+      } else {                  # keep the previous newline
+        $pnl = $i;
+        $ll = $cll;
+      }
+    } elsif ($tokens->[$i] =~ /<.*>/) {   # <HL> tags don't count
+    } else {
+     $ll += length($tokens->[$i])+1;
+     $cll += length($tokens->[$i])+1;
+    }
+  }
+  if ($ll <= $maxlen) { splice @$tokens, $pnl, 1; }
+}
+
+# draw the move list
+# TODO vertical scrolling
+sub game_draw_move_list {
+  my ($tokens, $x1, $y1, $x2, $y2) = @_;
+  my $win = $GAME{win};
+  my ($cx, $cy) = ($x1, $y1);
+  for my $token (@$tokens) {
+    if ($token eq "\n") {
+      $cx = $x1;
+      $cy++;
+    } elsif ($token eq "<HL>") {
+      $win->attron(A_REVERSE);
+    } elsif ($token eq "</HL>") {
+      $win->attroff(A_REVERSE);
+    } else {
+      $win->addstring($cy, $cx, $token);
+      $cx += length($token) + 1;
+    }
   }
   return $cy;
 }
@@ -532,7 +556,11 @@ sub game_redraw {
   $GAME{win}->clear;
 
   game_draw_header 0, 0, $maxx, 5;
-  my $y = game_draw_moves_list 0, 5, $maxx, 15;
+
+  my $tokens = game_prepare_move_list;
+  game_format_move_list $tokens, $maxx;
+  my $y = game_draw_move_list $tokens, 0, 5, $maxx, 15;
+
   $y = game_draw_variants 0, ($y+2), $maxx, ($y+8);
   $y = game_draw_comments 0, ($y+2), $maxx, ($y+8);
   game_draw_status $maxy-1;

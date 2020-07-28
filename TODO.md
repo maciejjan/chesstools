@@ -25,6 +25,8 @@
   and closes immediately?) and the editor exits the game view
 - lines are not truncated in the list view
 - game screen crashes on an illegal move
+- adding variant + delete-and-append from the first move of the variant --
+  the variant's identifier (first move) is not updated
 
 ## drawboard
 

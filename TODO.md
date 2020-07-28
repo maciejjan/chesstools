@@ -3,7 +3,6 @@
 ## pgnvi
 
 - creating a new file and adding a new game
-- non-standard starting positions (the `FEN` tag)
 - searching and filtering game lists
 - improvements in the tree view:
   - compress nodes with only one child
@@ -14,7 +13,6 @@
 - customizability in general
 - more user-friendly UI
 - (?) interface to UCI chess engines (e.g. Stockfish)
-- save non-standard tags
 - much more...
 
 ### Bugs
